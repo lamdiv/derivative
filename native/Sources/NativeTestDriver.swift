@@ -31,6 +31,11 @@ import Foundation
             case "dismissSearch": controller.closeSearch()
             case "submit": controller.navigate(command["input"] as? String ?? "", newTab: command["newTab"] as? Bool ?? true)
             case "toggleSidebar": controller.toggleSidebar()
+            case "relayoutTitlebar":
+                let titlebar = controller.window.standardWindowButton(.closeButton)?.superview
+                titlebar?.needsLayout = true
+                titlebar?.layoutSubtreeIfNeeded()
+                NSApp.updateWindows()
             case "revealSidebar": controller.setRevealed(command["visible"] as? Bool ?? true)
             case "sidebarSize":
                 controller.store.state.preferences.sidebarSize = id

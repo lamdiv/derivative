@@ -49,6 +49,7 @@ function header(snapshot, expanded = false) {
 }
 try {
   header(await command(driver, 'snapshot'));
+  header(await command(driver, 'relayoutTitlebar'));
   for (const [size, width] of [['compact', 252], ['comfortable', 288], ['wide', 320]]) {
     await command(driver, 'sidebarSize', { id: size });
     for (const [windowWidth, height] of [[700, 480], [1280, 840], [900, 600]]) {
@@ -63,6 +64,7 @@ try {
   assert.ok(hidden.windowButtons.every(button => button.hidden));
   const floating = await command(driver, 'revealSidebar');
   header(floating);
+  header(await command(driver, 'relayoutTitlebar'));
   assert.equal(floating.sidebarVisible, true);
   assert.deepEqual(floating.pageBounds, hidden.pageBounds, 'Revealing the sidebar must not shift the page');
   const full = await command(driver, 'expandedLayout', { expanded: true });

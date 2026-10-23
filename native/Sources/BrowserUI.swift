@@ -110,18 +110,22 @@ import SwiftUI
             let top = min(260, bounds.height*0.28)
             panel.frame = NSRect(x: max(24, (bounds.width-720)/2), y: top, width: min(720, bounds.width-48), height: bounds.height-top-24)
         }
+        alignWindowButtons()
+    }
+    func alignWindowButtons() {
         if !model.expanded {
             let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { window.standardWindowButton($0) }
             // Showing native controls schedules a title-bar layout. Complete it
             // before positioning, otherwise a floating reveal resets their row.
-            for button in buttons { button.isHidden = sidebar.isHidden }
+            for button in buttons where button.isHidden != sidebar.isHidden { button.isHidden = sidebar.isHidden }
             buttons.first?.superview?.layoutSubtreeIfNeeded()
             for (index, button) in buttons.enumerated() {
                 if let parent = button.superview {
                     let target = NSRect(x: sidebar.frame.minX+14+CGFloat(index)*20,
                                         y: sidebar.frame.minY+5+(28-button.frame.height)/2,
                                         width: button.frame.width, height: button.frame.height)
-                    button.setFrameOrigin(parent.convert(target, from: root).origin)
+                    let origin = parent.convert(target, from: root).origin
+                    if button.frame.origin != origin { button.setFrameOrigin(origin) }
                 }
             }
         }
@@ -210,6 +214,7 @@ import SwiftUI
         if id == store.state.activeTabId { window.title = "\(title) — Derivative Native" }
     }
     func windowDidResize(_ notification: Notification) { layout() }
+    func windowDidUpdate(_ notification: Notification) { alignWindowButtons() }
     func windowDidEnterFullScreen(_ notification: Notification) { model.expanded = true; model.pinned = false; revealed = false; layout() }
     func windowDidExitFullScreen(_ notification: Notification) { model.expanded = false; model.pinned = normalPinned; revealed = false; layout() }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
