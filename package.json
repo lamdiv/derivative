@@ -1,0 +1,64 @@
+{
+  "name": "derivative",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A little space for a curious internet.",
+  "author": "A Browser Guy",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build && node scripts/build-electron.mjs",
+    "start": "node scripts/start.mjs",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:electron": "npm run build && node tests/electron.mjs",
+    "package:mac": "npm run build && electron-builder --mac --arm64",
+    "build:icon": "node scripts/build-icon.mjs",
+    "test:interactions": "npm run build && node tests/interactions.mjs",
+    "test:layout": "npm run build && node tests/fullscreen-layout.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "esbuild": "latest",
+    "playwright": "latest",
+    "tailwindcss": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "build": {
+    "appId": "app.derivative.browser",
+    "productName": "Derivative",
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "assets/icon.png",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true
+    },
+    "directories": {
+      "output": "release"
+    }
+  }
+}
