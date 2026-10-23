@@ -23,7 +23,7 @@ await writeFile(join(profile, 'native-state.json'), JSON.stringify({
   history: [], activeSpaceId: 'personal', activeTabId: 'one',
   preferences: { theme: 'dark', sidebarMode: 'fixed', sidebarSize: 'comfortable', restoreSession: true, searchEngine: 'google' }
 }));
-const executable = await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native'));
+const executable = await realpath(resolve('native/build/Derivative.app/Contents/MacOS/Derivative'));
 const app = spawn(executable, ['--use-mock-keychain'], {
   env: { ...process.env, DERIVATIVE_NATIVE_USER_DATA: profile, DERIVATIVE_NATIVE_TEST_DIRECTORY: driver, DERIVATIVE_NATIVE_AUTOMATED: '1' },
   stdio: ['ignore', 'ignore', 'pipe']

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an isolated SwiftUI/AppKit + sandboxed CEF prototype on Apple Silicon."""
+"""Build Derivative with SwiftUI, AppKit, and sandboxed Chromium on Apple Silicon."""
 import hashlib
 import json
 import os
@@ -31,7 +31,7 @@ def sign(bundle):
 
 def main():
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
-        raise SystemExit('This prototype currently targets Apple Silicon macOS only.')
+        raise SystemExit('Derivative currently targets Apple Silicon macOS only.')
     CACHE.mkdir(exist_ok=True)
     BUILD.mkdir(exist_ok=True)
     archive = CACHE / LOCK['archive']
@@ -67,13 +67,13 @@ def main():
     run('xcrun', 'clang++', *common, '-fobjc-arc', '-c', sources / 'Browser.mm', '-o', BUILD / 'Browser.o')
     # Sign outside File Provider folders, which can re-add FinderInfo during signing.
     bundle_root = Path(tempfile.gettempdir()) / 'derivative-native-builds' / hashlib.sha256(str(ROOT).encode()).hexdigest()[:12]
-    app = bundle_root / 'Derivative Native.app'
+    app = bundle_root / 'Derivative.app'
     contents = app / 'Contents'
     for directory in ['MacOS', 'Frameworks', 'Resources/ThirdParty']:
         (contents / directory).mkdir(parents=True, exist_ok=True)
     run('xcrun', 'swiftc', '-target', target, BUILD / 'Browser.o', BUILD / 'BrowserUI.o', wrapper,
         '-framework', 'AppKit', '-framework', 'SwiftUI', '-framework', 'IOSurface', '-lc++',
-        '-Xlinker', '-ObjC', '-o', contents / 'MacOS/Derivative Native')
+        '-Xlinker', '-ObjC', '-o', contents / 'MacOS/Derivative')
     run('xcrun', 'clang++', *common, sources / 'Helper.cc', wrapper, '-framework', 'AppKit', '-framework', 'IOSurface', '-o', BUILD / 'Helper')
     framework = 'Chromium Embedded Framework.framework'
     destination = contents / 'Frameworks' / framework
@@ -90,20 +90,22 @@ def main():
                 'NSHighResolutionCapable': True}
         data.update(extra or {})
         path.write_bytes(plistlib.dumps(data))
-    info(contents / 'Info.plist', 'app.derivative.native.prototype', 'Derivative Native',
-         {'NSPrincipalClass': 'DerivativeApplication', 'CFBundleIconFile': 'Derivative.icns'})
+    info(contents / 'Info.plist', 'app.derivative.browser.native', 'Derivative',
+         {'NSPrincipalClass': 'DerivativeApplication', 'CFBundleIconFile': 'Derivative.icns', 'NSCameraUsageDescription': 'Allow websites you approve to use your camera.', 'NSMicrophoneUsageDescription': 'Allow websites you approve to use your microphone.', 'NSLocationWhenInUseUsageDescription': 'Allow websites you approve to use your location.'})
     for suffix, identifier in [('', ''), (' (Alerts)', '.alerts'), (' (GPU)', '.gpu'), (' (Plugin)', '.plugin'), (' (Renderer)', '.renderer')]:
-        name = 'Derivative Native Helper' + suffix
+        name = 'Derivative Helper' + suffix
         helper = contents / 'Frameworks' / (name + '.app') / 'Contents'
         (helper / 'MacOS').mkdir(parents=True, exist_ok=True)
         shutil.copy2(BUILD / 'Helper', helper / 'MacOS' / name)
-        info(helper / 'Info.plist', 'app.derivative.native.prototype.helper' + identifier, name, {'LSUIElement': True})
+        info(helper / 'Info.plist', 'app.derivative.browser.native.helper' + identifier, name, {'LSUIElement': True})
         sign(helper.parent)
     shutil.copy2(REPO / 'assets/icon.icns', contents / 'Resources/Derivative.icns')
     shutil.copy2(cef / 'LICENSE.txt', contents / 'Resources/ThirdParty/CEF-LICENSE.txt')
     shutil.copy2(cef / 'CREDITS.html', contents / 'Resources/ThirdParty/Chromium-CREDITS.html')
     sign(app)
-    output = BUILD / 'Derivative Native.app'
+    legacy = BUILD / 'Derivative Native.app'
+    if legacy.is_symlink(): legacy.unlink()
+    output = BUILD / 'Derivative.app'
     if output.is_symlink(): output.unlink()
     elif output.exists(): shutil.rmtree(output)
     output.symlink_to(app, target_is_directory=True)

@@ -12,7 +12,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const address=`http://127.0.0.1:${server.address().port}`;
 const profile=await mkdtemp(join(tmpdir(),'derivative-native-tabs-'));
 const driver=join(profile,'test-driver');
-const executable=await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native'));
+const executable=await realpath(resolve('native/build/Derivative.app/Contents/MacOS/Derivative'));
 let app,logs='',debugPort;let connections=[];
 const snapshot=()=>command(driver,'snapshot');
 async function launch(){
