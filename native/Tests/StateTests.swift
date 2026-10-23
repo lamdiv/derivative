@@ -69,6 +69,9 @@ import Foundation
         assert(BrowserStore(directory: directory).state.tabs.isEmpty)
         try Data("broken".utf8).write(to: restored.file, options: .atomic)
         assert(BrowserStore(directory: directory).state.spaces.count == 3)
+        assert(SavedBrowserState.displayAddress("https://www.github.com/lamdiv/derivative?q=private#top") == "github.com")
+        assert(SavedBrowserState.displayAddress("http://localhost:3000/path") == "localhost:3000")
+        assert(SavedBrowserState.displayAddress("https://user:password@example.org/path") == "example.org")
         print("PASS: native tab/Space selection, restoration, isolated empty Spaces, URL validation, sanitization, and atomic metadata.")
     }
 }

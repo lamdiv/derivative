@@ -46,6 +46,8 @@ The first build downloads a pinned Chromium framework and local build tools. Lat
 
 **Folders and favorites.** Use the menu beside the Space name to create a folder. Drag tabs into Pinned or a folder, or onto a Space icon to move and pin them there. Use the controls above the favorites grid to add or edit favorites. Right-click menus offer the same everyday actions without dragging.
 
+**Address bar.** The sidebar shows the current domain, with a copy-link button and a site-controls button. Copying briefly shows a checkmark. Site controls adjust page zoom or mute the current tab; click the domain to edit the full address.
+
 **Search.** **⌘T** opens the floating search panel over a webpage. On an empty New Tab page, it focuses the existing field; typing opens the same floating panel used over webpages. **⌘L** edits the current address. Choose a tab result to switch to it, or use its close control to close it. Empty Spaces show history matches only after typing. Escape dismisses the panel without creating a tab.
 
 **Split view.** Drop a tab onto the center of another tab, or use its context menu to split. The top and bottom edges still reorder tabs. Click either page to focus it, drag the divider to resize, or right-click the joined row to separate the tabs. Split arrangements are temporary, while the underlying tabs persist.
@@ -128,4 +130,4 @@ Memory use and responsiveness are still being evaluated. There is no current-bui
 
 Derivative is an early browser built around one main window. Separate browser windows, private browsing, a mini-browser, region capture, extensions, a password manager, automatic updates, and automatic tab discarding are not yet implemented. Some sign-in providers and DRM media depend on the embedded Chromium distribution.
 
-Session restoration saves tab URLs, titles, and organization. Unsaved forms and back/forward history survive ordinary tab switches, but do not survive restarting the app. Download history, split arrangements, and recently closed tabs last for the current app session. Website sign-ins persist within each Space. Data from the old Electron profiles is not automatically imported.
+Session restoration saves tab URLs, titles, and organization. Unsaved forms and back/forward history survive ordinary tab switches, but do not survive restarting the app. Download history, split arrangements, and recently closed tabs last for the current app session. Website sign-ins persist within each Space.

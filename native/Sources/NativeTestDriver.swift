@@ -96,6 +96,7 @@ import Foundation
                 return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden, "hitTarget": hit === button]
             }
             let reply: [String: Any] = [
+                "displayAddress": controller.model.displayAddress, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
