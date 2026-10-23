@@ -62,6 +62,14 @@ try {
     for (const [windowWidth, height] of [[700, 480], [1280, 840], [900, 600]]) {
       const snapshot = await command(driver, 'resize', { width: windowWidth, height });
       header(snapshot);
+      const select = snapshot.sidebarControls.find(c => c.label === 'sidebar-tab-select:one')?.bounds;
+      const close = snapshot.sidebarControls.find(c => c.label === 'sidebar-tab-close:one')?.bounds;
+      assert.ok(select && close, 'Tab select and close hit regions must exist');
+      near(select.x, snapshot.sidebarBounds.x+14, 'Tab selection includes the left inset');
+      near(select.width+close.width, width-28, 'The entire tab row must be covered by button targets');
+      near(select.x+select.width, close.x, 'No unclickable gap before the close button');
+      near(select.height, 34, 'Selection fills the tab height'); near(close.height, 34, 'Close target fills the tab height');
+      near(select.y, close.y, 'Selection and close targets align');
       near(snapshot.sidebarBounds.width, width, 'Sidebar width preset');
       near(snapshot.pageBounds.x, width + 16, 'Fixed sidebar reserves page space');
     }

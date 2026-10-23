@@ -3,6 +3,12 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
+typealias SidebarRowState<Value> = SwiftUI.State<Value>
+
+struct SidebarImmediateButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label.opacity(configuration.isPressed ? 0.72 : 1) }
+}
+
 let derivativeDragType = UTType(exportedAs: "app.derivative.browser.item", conformingTo: .data)
 
 struct BrowserDownload: Identifiable {
@@ -216,18 +222,31 @@ struct SidebarView: View {
 struct NativeTabRow: View {
     @ObservedObject var model: BrowserModel
     let tab: BrowserTab
+    @SidebarRowState<Bool> private var hovered = false
+    @SidebarRowState<Bool> private var closeHovered = false
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 0) {
             Button { model.selectTab(tab.id) } label: {
                 HStack(spacing: 9) {
                     if tab.loading { ProgressView().controlSize(.mini).frame(width: 16) }
                     else { SiteIcon(url: tab.url, title: tab.title) }
                     Text(tab.title).lineLimit(1); Spacer(minLength: 0)
-                }.padding(.leading, 10).frame(height: 34)
+                }.padding(.leading, 10).frame(maxWidth: .infinity).frame(height: 34).contentShape(Rectangle())
+                    .background { if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil { SidebarLayoutProbe(id: "sidebar-tab-select:"+tab.id).allowsHitTesting(false) } }
             }.accessibilityLabel("Select tab \(tab.title)")
-            Button { model.closeTab(tab.id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).frame(width: 25, height: 28).foregroundStyle(.secondary) }.accessibilityLabel("Close tab \(tab.title)")
-        }
-        .font(.system(size: 12)).background(model.wash.opacity(tab.id == model.store.state.activeTabId ? 1 : 0), in: RoundedRectangle(cornerRadius: 10))
+            Button { model.closeTab(tab.id) } label: {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(closeHovered ? model.ink : model.ink.opacity(0.5))
+                    .frame(width: 30, height: 34).contentShape(Rectangle())
+                    .background { if closeHovered { RoundedRectangle(cornerRadius: 7).fill(model.wash).padding(4).allowsHitTesting(false) } }
+                    .background { if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil { SidebarLayoutProbe(id: "sidebar-tab-close:"+tab.id).allowsHitTesting(false) } }
+            }.accessibilityLabel("Close tab \(tab.title)").onHover { closeHovered = $0 }
+        }.frame(maxWidth: .infinity).contentShape(Rectangle()).buttonStyle(SidebarImmediateButtonStyle())
+        .font(.system(size: 12))
+        .background {
+            RoundedRectangle(cornerRadius: 10).fill(model.wash.opacity(tab.id == model.store.state.activeTabId ? 1 : (hovered ? 0.65 : 0)))
+                .animation(.easeOut(duration: 0.09), value: hovered).allowsHitTesting(false)
+        }.onHover { hovered = $0 }
         .overlay {
             if model.dropTarget == "split:"+tab.id { HStack { Image(systemName: "rectangle.split.2x1"); Text("Drop to split").font(.system(size: 11)) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(model.accent.opacity(0.75), in: RoundedRectangle(cornerRadius: 10)).allowsHitTesting(false) }
             if model.dropTarget == "before:"+tab.id { VStack { Capsule().fill(model.accent).frame(height: 2); Spacer() }.allowsHitTesting(false) }
@@ -249,10 +268,12 @@ struct NativeTabRow: View {
 struct FolderRow: View {
     @ObservedObject var model: BrowserModel
     let folder: BrowserFolder
+    @SidebarRowState<Bool> private var hovered = false
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Button { model.store.toggleFolder(folder.id) } label: { HStack(spacing: 8) { Image(systemName: folder.collapsed ? "chevron.right" : "chevron.down").font(.system(size: 9)); Image(systemName: folder.collapsed ? "folder" : "folder.fill"); Text(folder.name); Spacer() }.font(.system(size: 12)).padding(9) }
-                .background(model.wash.opacity(0.5), in: RoundedRectangle(cornerRadius: 9))
+            Button { model.store.toggleFolder(folder.id) } label: { HStack(spacing: 8) { Image(systemName: folder.collapsed ? "chevron.right" : "chevron.down").font(.system(size: 9)); Image(systemName: folder.collapsed ? "folder" : "folder.fill"); Text(folder.name); Spacer() }.font(.system(size: 12)).padding(9).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }
+                .buttonStyle(SidebarImmediateButtonStyle())
+                .background(model.wash.opacity(hovered ? 0.8 : 0.5), in: RoundedRectangle(cornerRadius: 9)).onHover { hovered = $0 }
                 .onDrag { model.provider("folder:"+folder.id) }
                 .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id))
                 .contextMenu { Button("Rename folder") { model.send("folder.rename", id: folder.id) }; Button("Remove folder · keep tabs") { model.store.deleteFolder(folder.id) } }
@@ -330,7 +351,8 @@ struct SidebarDrop: DropDelegate {
     }
 }
 private struct SidebarLayoutProbe: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { let view = NSView(); view.identifier = NSUserInterfaceItemIdentifier("sidebar-header-layout"); return view }
+    var id = "sidebar-header-layout"
+    func makeNSView(context: Context) -> NSView { let view = NSView(); view.identifier = NSUserInterfaceItemIdentifier(id); return view }
     func updateNSView(_ view: NSView, context: Context) {}
 }
 

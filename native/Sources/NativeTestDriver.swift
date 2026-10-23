@@ -128,8 +128,8 @@ import Foundation
     }
     private func controls(in view: NSView, controller: BrowserController) -> [[String: Any]] {
         var result: [[String: Any]] = []
-        if view.identifier?.rawValue == "sidebar-header-layout" {
-            result.append(["label": "header", "bounds": rect(controller.root.convert(view.bounds, from: view))])
+        if let id = view.identifier?.rawValue, id == "sidebar-header-layout" || id.hasPrefix("sidebar-tab-") {
+            result.append(["label": id == "sidebar-header-layout" ? "header" : id, "bounds": rect(controller.root.convert(view.bounds, from: view))])
         }
         for child in view.subviews {
             result += controls(in: child, controller: controller)
