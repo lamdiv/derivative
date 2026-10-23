@@ -90,6 +90,25 @@ try {
   near(fullReveal.sidebarBounds.y, 8, 'Fullscreen sidebar matches the bottom inset');
   assert.deepEqual(fullReveal.pageBounds, full.pageBounds, 'Fullscreen reveal must not resize the page');
   header(await command(driver, 'expandedLayout', { expanded: false }));
+  await command(driver, 'preferences', { sidebarMode: 'fixed' });
+  function nativeControlsOnly(snapshot) {
+    assert.ok(snapshot.windowButtons.every(button => button.hidden), 'Sidebar lights must stay hidden throughout the native fullscreen animation');
+    assert.ok(snapshot.systemControlsHidden.every(hidden => !hidden), 'Only native controls own the transition');
+  }
+  for (let cycle = 0; cycle < 2; cycle++) {
+    nativeControlsOnly(await command(driver, 'fullscreenPhase', { phase: 'entering' }));
+    nativeControlsOnly(await command(driver, 'resize', { width: 1100, height: 750 }));
+    nativeControlsOnly(await command(driver, 'fullscreenPhase', { phase: 'entered' }));
+    nativeControlsOnly(await command(driver, 'revealSidebar'));
+    const leaving = await command(driver, 'fullscreenPhase', { phase: 'exiting' });
+    assert.equal(leaving.fullscreenTransitioning, true); nativeControlsOnly(leaving);
+    nativeControlsOnly(await command(driver, 'resize', { width: 900, height: 600 }));
+    const normal = await command(driver, 'fullscreenPhase', { phase: 'exited' });
+    assert.equal(normal.fullscreenTransitioning, false); header(normal);
+  }
+  await command(driver, 'fullscreenPhase', { phase: 'entering' });
+  const failed = await command(driver, 'fullscreenPhase', { phase: 'failedEntering' });
+  assert.equal(failed.fullscreenTransitioning, false); header(failed);
   const exited = new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Native quit timed out: ' + logs)), 10000);
     app.once('exit', () => { clearTimeout(timer); resolve(); });
@@ -99,7 +118,7 @@ try {
   assert.equal(app.exitCode, 0, logs);
   console.log('PASS: native sidebar header, aligned traffic lights, three widths, minimum-size 12-favorite grid, floating reveal, fullscreen composition, and clean quit.');
 } finally {
-  if (app.exitCode === null) {
+  if (app.exitCode === null && app.signalCode === null) {
     const exited = new Promise(resolve => app.once('exit', resolve));
     app.kill('SIGTERM');
     await exited;

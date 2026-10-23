@@ -58,6 +58,16 @@ import Foundation
             case "sidebarSize":
                 controller.store.state.preferences.sidebarSize = id
                 controller.layout()
+            case "fullscreenPhase":
+                let notice = Notification(name: NSWindow.didResizeNotification, object: controller.window)
+                switch command["phase"] as? String {
+                case "entering": controller.windowWillEnterFullScreen(notice)
+                case "entered": controller.windowDidEnterFullScreen(notice)
+                case "exiting": controller.windowWillExitFullScreen(notice)
+                case "exited": controller.windowDidExitFullScreen(notice)
+                case "failedEntering": controller.windowDidFailToEnterFullScreen(controller.window)
+                default: break
+                }
             case "expandedLayout":
                 // Exercise fullscreen composition without moving the user's desktop into a Space.
                 controller.model.expanded = command["expanded"] as? Bool ?? true
@@ -90,6 +100,7 @@ import Foundation
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
                 "systemControlsHidden": [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { controller.window.standardWindowButton($0)?.isHidden },
+                "fullscreenTransitioning": controller.fullscreenTransitioning,
                 "windowFullscreen": controller.window.styleMask.contains(.fullScreen), "rootHidden": controller.root.isHidden, "rootAttached": controller.root.window === controller.window,
                 "windowMiniaturized": controller.window.isMiniaturized,
                 "downloadsExpanded": controller.model.downloadsExpanded, "sidebarTransitioning": controller.sidebarTransitioning,

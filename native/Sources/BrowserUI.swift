@@ -48,6 +48,7 @@ import QuartzCore
     let splitDivider = SplitDivider()
     var pageEnteredFullscreen = false
     var nativeFullscreen = false
+    var fullscreenTransitioning = false
     var appearanceObservation: NSKeyValueObservation?
 
 
@@ -198,7 +199,7 @@ import QuartzCore
             if let button = window.standardWindowButton(type), button.isHidden != !nativeFullscreen { button.isHidden = !nativeFullscreen }
         }
         for (index, button) in windowButtons.enumerated() {
-            button.isHidden = model.expanded || sidebar.isHidden || sidebarTransitioning
+            button.isHidden = nativeFullscreen || fullscreenTransitioning || model.expanded || sidebar.isHidden || sidebarTransitioning
             button.setFrameOrigin(NSPoint(x: sidebar.frame.minX+14+CGFloat(index)*20,
                                           y: sidebar.frame.minY+14+(28-button.frame.height)/2))
         }
@@ -346,15 +347,26 @@ import QuartzCore
         if id == store.state.activeTabId { window.title = "\(title) — Derivative" }
     }
     func windowDidResize(_ notification: Notification) {
-        if window.styleMask.contains(.fullScreen) == false && ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_AUTOMATED"] != "1" {
+        if !fullscreenTransitioning && window.styleMask.contains(.fullScreen) == false && ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_AUTOMATED"] != "1" {
             let expanded = window.isZoomed
             if expanded != model.expanded { model.expanded = expanded; if expanded { model.expandedSidebarMode = "hover" }; model.pinned = expanded ? false : normalPinned; revealed = false }
         }
         layout()
     }
     func windowDidUpdate(_ notification: Notification) { alignWindowButtons() }
-    func windowDidEnterFullScreen(_ notification: Notification) { nativeFullscreen = true; model.expanded = true; model.expandedSidebarMode = "hover"; model.pinned = false; revealed = false; layout() }
-    func windowDidExitFullScreen(_ notification: Notification) { nativeFullscreen = false; model.expanded = false; model.pinned = normalPinned; revealed = false; layout() }
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        fullscreenTransitioning = true; nativeFullscreen = true; alignWindowButtons()
+    }
+    func windowWillExitFullScreen(_ notification: Notification) {
+        fullscreenTransitioning = true; alignWindowButtons()
+    }
+    func windowDidEnterFullScreen(_ notification: Notification) { fullscreenTransitioning = false; nativeFullscreen = true; model.expanded = true; model.expandedSidebarMode = "hover"; model.pinned = false; revealed = false; layout() }
+    func windowDidExitFullScreen(_ notification: Notification) { fullscreenTransitioning = false; nativeFullscreen = false; model.expanded = false; model.pinned = normalPinned; revealed = false; layout() }
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) { recoverFullscreenTransition() }
+    func windowDidFailToExitFullScreen(_ window: NSWindow) { recoverFullscreenTransition() }
+    private func recoverFullscreenTransition() {
+        fullscreenTransitioning = false; nativeFullscreen = window.styleMask.contains(.fullScreen); layout()
+    }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if finishingQuit { return true }
         store.flush(); DerivativeRequestQuit(); return false
