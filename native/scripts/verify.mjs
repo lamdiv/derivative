@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { command, waitFor } from './driver.mjs';
 
 const server=createServer((req,res)=>{
   res.setHeader('content-type','text/html');
@@ -15,7 +16,8 @@ const address=`http://127.0.0.1:${server.address().port}`;
 const portServer=createServer();await new Promise(resolve=>portServer.listen(0,'127.0.0.1',resolve));
 const port=portServer.address().port;await new Promise(resolve=>portServer.close(resolve));
 const profile=await mkdtemp(join(tmpdir(),'derivative-native-'));
-const app=spawn(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native'),[`--url=${address}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:profile},stdio:['ignore','pipe','pipe']});
+const driver=join(profile,'test-driver');
+const app=spawn(await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native')),[`--url=${address}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:profile,DERIVATIVE_NATIVE_TEST_DIRECTORY:driver,DERIVATIVE_NATIVE_TRACE:'1',DERIVATIVE_NATIVE_AUTOMATED:process.env.KEEP_NATIVE==='1'?'0':'1'},stdio:['ignore','pipe','pipe']});
 let logs='';app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 try {
@@ -25,7 +27,7 @@ try {
     try{browser=await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:1000});break;}catch{await new Promise(resolve=>setTimeout(resolve,200));}
   }
   assert.ok(browser,`Native browser debugging endpoint did not start: ${logs}`);
-  const page=browser.contexts()[0].pages()[0];
+  let page;await waitFor(()=>{page=browser.contexts().flatMap(context=>context.pages()).find(page=>page.url()===address+'/');return !!page;},'Native page did not appear: '+logs);
   await page.waitForURL(address+'/');
   await page.getByRole('heading',{name:'Chromium, with native controls'}).waitFor();
   assert.equal(await page.evaluate(()=>typeof process),'undefined');
@@ -44,9 +46,9 @@ try {
     assert.equal(app.exitCode,0,logs);
     console.log('PASS: native window/menu quit exits cleanly.');
   }else{
-    const session=await browser.newBrowserCDPSession();
-    await session.send('Browser.close');
-    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Native app did not shut down')),8000);app.once('exit',()=>{clearTimeout(timer);resolve();});});
+    const exited=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Native app did not shut down: '+logs)),8000);app.once('exit',()=>{clearTimeout(timer);resolve();});});
+    await command(driver,'quit');
+    await exited;
     assert.equal(app.exitCode,0,logs);
     console.log('PASS: Chromium and native host shut down cleanly.');
   }

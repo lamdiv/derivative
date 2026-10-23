@@ -1,12 +1,13 @@
 // Diagnostic RSS comparison, not unique physical memory or a production benchmark.
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { _electron, chromium } from 'playwright';
 import { runtime } from '../../scripts/runtime.mjs';
+import { command, waitFor } from './driver.mjs';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const server=createServer((_req,res)=>{res.setHeader('content-type','text/html');res.end('<!doctype html><title>Memory fixture</title><style>body{font:18px system-ui;padding:60px;background:#faf7f2;color:#453f4d}</style><h1>Same page, different shell</h1><textarea aria-label="Draft"></textarea>'+Array.from({length:300},(_,i)=>`<p>Local reading fixture ${i}</p>`).join(''));});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -34,12 +35,12 @@ const electronProfile=await mkdtemp(join(tmpdir(),'derivative-electron-memory-')
 try {
   const portServer=createServer();await new Promise(resolve=>portServer.listen(0,'127.0.0.1',resolve));
   const port=portServer.address().port;await new Promise(resolve=>portServer.close(resolve));
-  native=spawn(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native'),[`--url=${url}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:nativeProfile},stdio:'ignore'});
+  native=spawn(await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native')),[`--url=${url}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:nativeProfile,DERIVATIVE_NATIVE_AUTOMATED:'1',DERIVATIVE_NATIVE_TEST_DIRECTORY:join(nativeProfile,'test-driver')},stdio:'ignore'});
   for(let i=0;i<60;i++){try{browser=await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:1000});break;}catch{await sleep(200);}}
   assert.ok(browser,'Native browser did not start');
-  const nativePage=browser.contexts()[0].pages()[0];await nativePage.getByRole('heading',{name:'Same page, different shell'}).waitFor();
+  let nativePage;await waitFor(()=>{nativePage=browser.contexts().flatMap(context=>context.pages()).find(page=>page.url()===url+'/');return !!nativePage;},'Native page did not appear');await nativePage.getByRole('heading',{name:'Same page, different shell'}).waitFor();
   results.push(await measure('SwiftUI/AppKit + CEF',native.pid,browser.version()));
-  const nativeSession=await browser.newBrowserCDPSession();await nativeSession.send('Browser.close');
+  await command(join(nativeProfile,'test-driver'),'quit');
   await browser.close().catch(()=>{});browser=null;
   await Promise.race([new Promise(resolve=>native.once('exit',resolve)),sleep(5000)]);
   if(native.exitCode===null)throw new Error('Native app did not exit after Browser.close');
@@ -47,6 +48,7 @@ try {
   const env={...process.env,DERIVATIVE_USER_DATA:electronProfile};delete env.ELECTRON_RUN_AS_NODE;delete env.ELECTRON_RENDERER_URL;
   electron=await _electron.launch({executablePath:await runtime(),args:[resolve('.')],env});
   await electron.firstWindow();
+  await electron.evaluate(({BrowserWindow})=>{const window=BrowserWindow.getAllWindows()[0];window.setIgnoreMouseEvents(true);window.setFocusable(false);});
   const ui=electron.context().pages().find(page=>page.url().includes('index.html')&&!page.url().includes('chrome=1'));
   await ui.waitForFunction(()=>!!window.browser);
   await ui.evaluate(input=>window.browser.dispatch({type:'navigate',input,newTab:true}),url);

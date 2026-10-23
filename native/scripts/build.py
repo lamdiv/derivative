@@ -61,8 +61,8 @@ def main():
     sources = ROOT / 'Sources'
     target = 'arm64-apple-macos14.0'
     run('xcrun', 'swiftc', '-swift-version', '5', '-O', '-target', target, '-module-cache-path', CACHE / 'swift-modules',
-        '-parse-as-library', '-emit-object', '-import-objc-header', sources / 'Bridge.h',
-        sources / 'BrowserUI.swift', '-o', BUILD / 'BrowserUI.o')
+        '-parse-as-library', '-whole-module-optimization', '-emit-object', '-import-objc-header', sources / 'Bridge.h',
+        *sorted(sources.glob('*.swift')), '-o', BUILD / 'BrowserUI.o')
     common = ['-std=c++20', '-O2', '-target', target, '-isysroot', sdk, '-I', cef]
     run('xcrun', 'clang++', *common, '-fobjc-arc', '-c', sources / 'Browser.mm', '-o', BUILD / 'Browser.o')
     # Sign outside File Provider folders, which can re-add FinderInfo during signing.
