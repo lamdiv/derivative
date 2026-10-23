@@ -75,9 +75,17 @@ try {
   assert.deepEqual(floating.pageBounds, hidden.pageBounds, 'Revealing the sidebar must not shift the page');
   const full = await command(driver, 'expandedLayout', { expanded: true });
   assert.equal(full.sidebarVisible, false);
+  assert.ok(full.windowButtons.every(button => button.hidden), 'Fullscreen traffic lights stay hidden');
+  assert.equal(full.systemControlsHidden.length, 3);
+  assert.ok(full.systemControlsHidden.every(Boolean), 'Native title-bar controls stay hidden in fullscreen');
   assert.deepEqual(full.pageBounds, full.rootBounds, 'Fullscreen page has no padding');
   const fullReveal = await command(driver, 'revealSidebar');
   header(fullReveal, true);
+  assert.ok(fullReveal.windowButtons.every(button => button.hidden), 'Revealing the fullscreen sidebar must not show traffic lights');
+  await command(driver, 'systemControlsReveal');
+  const afterTopHover = await command(driver, 'snapshot');
+  assert.ok(afterTopHover.systemControlsHidden.every(Boolean), 'Top-edge title-bar reveal must not expose native traffic lights');
+  assert.ok(afterTopHover.windowButtons.every(button => button.hidden));
   near(fullReveal.sidebarBounds.y, 8, 'Fullscreen sidebar matches the bottom inset');
   assert.deepEqual(fullReveal.pageBounds, full.pageBounds, 'Fullscreen reveal must not resize the page');
   header(await command(driver, 'expandedLayout', { expanded: false }));

@@ -46,6 +46,9 @@ import Foundation
             case "dismissSearch": controller.closeSearch()
             case "submit": controller.navigate(command["input"] as? String ?? "", newTab: command["newTab"] as? Bool ?? true)
             case "toggleSidebar": controller.toggleSidebar()
+            case "systemControlsReveal":
+                for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { controller.window.standardWindowButton(type)?.isHidden = false }
+                NSApp.updateWindows()
             case "relayoutTitlebar":
                 let titlebar = controller.window.standardWindowButton(.closeButton)?.superview
                 titlebar?.needsLayout = true
@@ -85,6 +88,7 @@ import Foundation
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
+                "systemControlsHidden": [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { controller.window.standardWindowButton($0)?.isHidden },
                 "windowFullscreen": controller.window.styleMask.contains(.fullScreen), "rootHidden": controller.root.isHidden, "rootAttached": controller.root.window === controller.window,
                 "windowMiniaturized": controller.window.isMiniaturized,
                 "downloadsExpanded": controller.model.downloadsExpanded, "sidebarTransitioning": controller.sidebarTransitioning,

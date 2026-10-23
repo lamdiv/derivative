@@ -191,10 +191,10 @@ import QuartzCore
         else { window.toggleFullScreen(nil) }
     }
     func alignWindowButtons() {
-        if !model.expanded {
-            for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-                if let button = window.standardWindowButton(type), !button.isHidden { button.isHidden = true }
-            }
+        // AppKit may reveal its title-bar controls on a fullscreen top-edge
+        // hover. Keep those hidden in every mode; the sidebar owns our controls.
+        for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            if let button = window.standardWindowButton(type), !button.isHidden { button.isHidden = true }
         }
         for (index, button) in windowButtons.enumerated() {
             button.isHidden = model.expanded || sidebar.isHidden || sidebarTransitioning
