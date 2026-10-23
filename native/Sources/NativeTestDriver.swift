@@ -78,7 +78,7 @@ import Foundation
             case "resize":
                 controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
                 controller.layout()
-            case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, began: command["began"] as? Bool ?? false)
+            case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, phase: SpaceSwipePhase(rawValue: command["phase"] as? String ?? "") ?? (command["began"] as? Bool == true ? .began : .unphased))
             case "shortcut": shortcut(Int32(command["key"] as? Int ?? 0))
             case "recent": controller.recent(command["step"] as? Int ?? 1)
             case "commitRecent": controller.commitRecent()

@@ -152,7 +152,13 @@ struct SidebarView: View {
                     }
                 }.padding(.bottom, 4).offset(x: model.swipeOffset)
             }.scrollIndicators(.hidden)
-            if let edge = model.swipeEdge { Text(edge).font(.system(size: 10)).foregroundStyle(.secondary).frame(maxWidth: .infinity).transition(.opacity) }
+                .overlay(alignment: .bottom) {
+                    if let edge = model.swipeEdge {
+                        Text(edge).font(.system(size: 10, weight: .medium)).padding(.horizontal, 12).padding(.vertical, 7)
+                            .derivativeGlass(model, radius: 12, kind: .control).padding(.bottom, 6)
+                            .allowsHitTesting(false).transition(.opacity)
+                    }
+                }
             if !model.error.isEmpty { Text(model.error).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3) }
             footer
         }

@@ -148,19 +148,55 @@ import SwiftUI
         if space != tab.spaceId { store.select(id) }
         showActive()
     }
-    func handleSwipe(dx: Double, dy: Double, time: Double, began: Bool) -> Bool {
+    func handleSidebarScroll(_ event: NSEvent, point: NSPoint) -> Bool {
+        let phase: SpaceSwipePhase
+        if !event.momentumPhase.isEmpty {
+            phase = event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) ? .momentumEnded : .momentum
+        } else if event.phase.contains(.cancelled) { phase = .cancelled }
+        else if event.phase.contains(.ended) { phase = .ended }
+        else if event.phase.contains(.began) || event.phase.contains(.mayBegin) { phase = .began }
+        else if event.phase.contains(.changed) || event.phase.contains(.stationary) { phase = .changed }
+        else { phase = .unphased }
+        let available = !sidebar.isHidden && auxiliaryPanel == nil && searchPanel == nil && !model.siteControlsOpen && !model.downloadsExpanded && model.dragging == nil && window.attachedSheet == nil
+        let inside = sidebar.frame.contains(point)
+        if !available || (phase == .began && !inside) {
+            if swipe.tracking || swipe.consumesMomentum || model.swipeOffset != 0 || model.swipeEdge != nil {
+                swipe = SpaceSwipe(); settleSwipe()
+            }
+            return false
+        }
+        guard inside || swipe.tracking || swipe.consumesMomentum else { return false }
+        return handleSwipe(dx: -event.scrollingDeltaX, dy: -event.scrollingDeltaY, time: event.timestamp, phase: phase)
+    }
+    func settleSwipe() {
+        swipeReset?.cancel()
+        let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+        withAnimation(.easeOut(duration: duration)) { model.swipeOffset = 0 }
+        let work = DispatchWorkItem { [weak self] in self?.model.swipeEdge = nil }
+        swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.4, execute: work)
+        let pointer = root.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        if !model.pinned && !sidebar.frame.contains(pointer) { scheduleHide() }
+    }
+    func handleSwipe(dx: Double, dy: Double, time: Double, phase: SpaceSwipePhase) -> Bool {
         let index = store.state.spaces.firstIndex { $0.id == store.state.activeSpaceId } ?? 0
-        let result = swipe.update(dx: dx, dy: dy, time: time, index: index, count: store.state.spaces.count, began: began)
+        let result = swipe.update(dx: dx, dy: dy, time: time, index: index, count: store.state.spaces.count, phase: phase)
+        if phase == .ended || phase == .cancelled || phase == .momentumEnded { settleSwipe(); return result.consumed }
+        if phase == .momentum { return result.consumed }
+        if phase == .began { swipeReset?.cancel(); model.swipeEdge = nil; model.swipeOffset = 0 }
+        swipeReset?.cancel()
+        if phase == .unphased {
+            let work = DispatchWorkItem { [weak self] in self?.swipe = SpaceSwipe(); self?.settleSwipe() }
+            swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.25, execute: work)
+        }
         guard result.consumed else { return false }
-        model.swipeOffset = result.offset; model.swipeEdge = result.edge
+        hideWork?.cancel(); hideWork = nil
+        if !swipe.committed { model.swipeOffset = result.offset; model.swipeEdge = result.edge }
         if result.step != 0 {
             selectSpace(store.state.spaces[index+result.step].id)
+            model.swipeEdge = nil
             model.swipeOffset = CGFloat(result.step)*35
-            withAnimation(.easeOut(duration: 0.18)) { model.swipeOffset = 0 }
+            withAnimation(.easeOut(duration: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18)) { model.swipeOffset = 0 }
         }
-        swipeReset?.cancel()
-        let work = DispatchWorkItem { [weak self] in withAnimation(.easeOut(duration: 0.18)) { self?.model.swipeOffset = 0; self?.model.swipeEdge = nil } }
-        swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.18, execute: work)
         return true
     }
     func stepTab(_ step: Int) {

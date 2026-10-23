@@ -137,12 +137,12 @@ import QuartzCore
                 if event.type == .mouseMoved && NSEvent.pressedMouseButtons & 1 == 0 { self.model.dragging = nil; self.model.dropTarget = nil }
                 if event.type == .leftMouseUp { DispatchQueue.main.async { self.model.dragging = nil; self.model.dropTarget = nil } }
                 let point = self.root.convert(event.locationInWindow, from: nil)
-                if event.type == .scrollWheel, !self.sidebar.isHidden, self.sidebar.frame.contains(point), self.auxiliaryPanel == nil, self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
-                    consumed = self.handleSwipe(dx: -event.scrollingDeltaX, dy: -event.scrollingDeltaY, time: event.timestamp, began: event.phase.contains(.began)); if consumed { return }
+                if event.type == .scrollWheel {
+                    consumed = self.handleSidebarScroll(event, point: point); if consumed { return }
                 }
                 if event.type == .leftMouseDown, let panel = self.auxiliaryPanel, !panel.frame.contains(point) { self.closeOverlay(); consumed = true; return }
                 if event.type == .leftMouseDown && self.searchPanel != nil && !self.searchPanel!.frame.contains(point) { self.closeSearch(); consumed = true; return }
-                if event.type == .mouseMoved && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
+                if event.type == .mouseMoved && !self.swipe.tracking && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
                     if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
                     else if point.x > self.store.state.preferences.sidebarWidth+24 { self.scheduleHide() }
                     else { self.hideWork?.cancel(); self.hideWork = nil; if self.sidebarHiding { self.setRevealed(true) } }

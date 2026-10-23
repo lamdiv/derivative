@@ -73,26 +73,45 @@ import Foundation
     }
 }
 
+enum SpaceSwipePhase: String {
+    case began, changed, ended, cancelled, momentum, momentumEnded, unphased
+}
+
 struct SpaceSwipe {
-    var last = -Double.infinity, x = 0.0, y = 0.0, committed = 0.0, reverse = 0.0
+    private var last = -Double.infinity, x = 0.0, y = 0.0
     var axis = 0
-    mutating func update(dx: Double, dy: Double, time: Double, index: Int, count: Int, began: Bool = false) -> (consumed: Bool, offset: Double, edge: String?, step: Int) {
-        if began || time-last > 0.16 { self = SpaceSwipe() }
+    private(set) var tracking = false
+    private(set) var committed = false
+    private(set) var consumesMomentum = false
+    mutating func update(dx: Double, dy: Double, time: Double, index: Int, count: Int, phase: SpaceSwipePhase = .unphased) -> (consumed: Bool, offset: Double, edge: String?, step: Int) {
+        if phase == .momentum || phase == .momentumEnded {
+            let consumed = consumesMomentum || (tracking && axis == 1)
+            if phase == .momentumEnded { self = SpaceSwipe() }
+            return (consumed, 0, nil, 0)
+        }
+        if phase == .ended || phase == .cancelled {
+            let consumed = tracking && axis == 1
+            self = SpaceSwipe(); consumesMomentum = consumed
+            return (consumed, 0, nil, 0)
+        }
+        if phase == .began || (phase == .unphased && (!tracking || time-last > 0.25)) {
+            self = SpaceSwipe(); tracking = true
+        }
+        // A changed event without a start belongs to a gesture that began
+        // outside the sidebar. Never acquire it halfway through scrolling.
+        guard tracking, dx.isFinite, dy.isFinite, time.isFinite, count > 0 else { return (false, 0, nil, 0) }
         last = time; x += dx; y += dy
         if axis == 0 {
-            if abs(x) >= 8 && abs(x) > abs(y)*1.15 { axis = 1 }
-            else if abs(y) >= 8 && abs(y) > abs(x)*1.25 { axis = 2 }
+            if abs(x) >= 8 && abs(x) > abs(y)*1.35 { axis = 1 }
+            else if abs(y) >= 8 && abs(y) > abs(x)*1.05 { axis = 2 }
         }
         guard axis == 1 else { return (false, 0, nil, 0) }
-        if committed != 0 {
-            reverse = dx.sign == (-committed).sign ? reverse+dx : 0
-            if abs(reverse) < 24 { return (true, 0, nil, 0) }
-            x = reverse; y = 0; reverse = 0; committed = 0
-        }
+        consumesMomentum = true
+        guard !committed else { return (true, 0, nil, 0) }
         let sign = x < 0 ? -1 : 1
         let outside = index+sign < 0 || index+sign >= count
         let offset = -Double(sign)*(outside ? 28*(1-exp(-abs(x)/75)) : min(48, abs(x)*0.7))
-        if !outside && abs(x) >= 52 { committed = Double(sign); return (true, 0, nil, sign) }
+        if !outside && abs(x) >= 52 { committed = true; return (true, 0, nil, sign) }
         return (true, offset, outside ? (sign < 0 ? "First Space" : "Last Space") : nil, 0)
     }
 }
