@@ -27,6 +27,7 @@ import Foundation
             case "selectSpace": controller.selectSpace(id)
             case "selectTab": controller.selectTab(id)
             case "closeTab": controller.closeTab(id)
+            case "searchQuery": controller.searchModel?.query = command["query"] as? String ?? ""
             case "search": controller.showSearch(edit: command["edit"] as? Bool ?? false)
             case "dismissSearch": controller.closeSearch()
             case "submit": controller.navigate(command["input"] as? String ?? "", newTab: command["newTab"] as? Bool ?? true)
@@ -49,7 +50,14 @@ import Foundation
             case "resize":
                 controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
                 controller.layout()
-            default: break
+            case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, began: command["began"] as? Bool ?? false)
+            case "shortcut": shortcut(Int32(command["key"] as? Int ?? 0))
+            case "recent": controller.recent(command["step"] as? Int ?? 1)
+            case "commitRecent": controller.commitRecent()
+            default:
+                var values: [String: String] = [:]
+                for (key, value) in command { if let string = value as? String { values[key] = string } }
+                controller.perform(command["action"] as? String ?? "", values)
             }
             controller.root.layoutSubtreeIfNeeded()
             let state = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(controller.store.state))) ?? [:]
@@ -59,8 +67,13 @@ import Foundation
                 return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden]
             }
             let reply: [String: Any] = [
+                "splitIDs": controller.model.splitIDs, "overlay": controller.overlayKind,
+                "sidebarMode": controller.model.effectiveSidebarMode, "dark": controller.model.dark, "swipeEdge": controller.model.swipeEdge ?? "", "swipeOffset": controller.model.swipeOffset,
+                "suggestions": nativeSuggestions(command["query"] as? String ?? "", store: controller.store).map { ["id": $0.id, "kind": $0.kind, "url": $0.url] },
+                "downloads": controller.model.downloads.map { ["id": $0.id, "path": $0.path, "name": $0.name, "status": $0.status] },
+                "pageFrames": controller.pageHost.subviews.filter { $0 !== controller.home && $0 !== controller.splitDivider && !$0.isHidden }.map { rect($0.frame) },
                 "state": state, "loadedPages": DerivativePageCount(),
-                "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
+                "searchBounds": rect(controller.searchPanel?.frame ?? .zero), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
                 "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": rect(bounds),
                 "rootBounds": rect(controller.root.bounds), "sidebarBounds": rect(controller.sidebar.frame),
                 "sidebarControls": controls(in: controller.sidebar, controller: controller), "windowButtons": buttons

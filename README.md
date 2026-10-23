@@ -10,7 +10,7 @@ Derivative brings your tabs, favorite places, and separate browsing profiles int
 
 **Early development · macOS · Apple Silicon**
 
-A [native SwiftUI/AppKit + Chromium prototype](native/README.md) is being developed alongside the Electron app. It is an experimental migration path; the feature descriptions below refer to the Electron version.
+Derivative’s macOS interface is built with SwiftUI and AppKit, with Chromium rendering real webpages. The [native build guide](native/README.md) covers setup, storage, and verification. The Electron implementation remains available in this repository.
 
 ## A place for every part of your day
 
@@ -25,22 +25,22 @@ When maximized or fullscreen, the webpage fills the window. The sidebar floats o
 
 ## Run locally
 
-You'll need **macOS**, **Node.js 22.12+**, and **npm**. Node.js 24 is recommended; Apple Silicon is the primary target.
+You'll need **Apple Silicon macOS 14+**, **Python 3.12+**, and Apple's command-line tools.
 
 ```sh
 git clone https://github.com/lamdiv/derivative.git
 cd derivative
-npm ci
-npm run dev
+python3 native/scripts/build.py
+open "native/build/Derivative.app"
 ```
 
-This launches the native browser and the Vite development server. React and CSS changes update live; changes to the Electron or shared code rebuild and restart the app.
+The first build downloads a pinned Chromium framework and local build tools. Later builds reuse them. See the [build guide](native/README.md) for details.
 
-To run a production build locally:
+The Electron implementation can still be run with Node.js 22.12+ and npm:
 
 ```sh
-npm run build
-npm start
+npm ci
+npm run dev
 ```
 
 ## Make yourself at home
@@ -49,11 +49,11 @@ npm start
 
 **Sidebar.** Choose Fixed, Floating on hover, or Hidden in Settings. Press **⌘S** to toggle it. In hover mode, move to the left edge to reveal it and use the top-left toggle to keep it open. The bottom-left menu offers Compact, Comfortable, and Wide sizes.
 
-**Folders and favorites.** Use the folder-plus button beside the Space name to create a folder. Drag tabs into Pinned or a folder, or onto a Space icon to move and pin them there. Use the controls above the favorites grid to add or edit favorites. Right-click menus offer the same everyday actions without dragging.
+**Folders and favorites.** Use the menu beside the Space name to create a folder. Drag tabs into Pinned or a folder, or onto a Space icon to move and pin them there. Use the controls above the favorites grid to add or edit favorites. Right-click menus offer the same everyday actions without dragging.
 
 **Search.** **⌘T** opens the floating search panel over a webpage. If you're already on an empty New Tab page, it focuses the existing search field. **⌘L** edits the current address. Choose a tab result to switch to it, or use its close control to close it. Escape dismisses the panel without creating a tab.
 
-**Split view.** Drop a tab onto the center of another tab, or use its context menu to split. The top and bottom edges still reorder tabs. Click either page to focus it; use a pane's title-row control to return to one page. Split arrangements are temporary, while the underlying tabs persist.
+**Split view.** Drop a tab onto the center of another tab, or use its context menu to split. The top and bottom edges still reorder tabs. Click either page to focus it, drag the divider to resize, or right-click the joined row to separate the tabs. Split arrangements are temporary, while the underlying tabs persist.
 
 ## Keyboard shortcuts
 
@@ -83,24 +83,22 @@ The shortcut reference is also available in **Settings → Shortcuts**.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Run the app with live UI updates and native restarts |
-| `npm run typecheck` | Check TypeScript |
-| `npm run build` | Build the UI, Electron main process, and preload |
-| `npm test` | Run unit tests |
-| `npm run test:interactions` | Check native interactions, profiles, and split views |
-| `npm run test:layout` | Check sidebar and native webpage layout |
-| `npm run test:electron` | Run the broader native integration suite |
-| `npm run build:icon` | Regenerate the macOS icons from the brand geometry |
-| `npm run package:mac` | Build Apple Silicon DMG and ZIP artifacts in `release/` |
+| `python3 native/scripts/build.py` | Build and sign the native macOS app locally |
+| `node native/scripts/verify.mjs` | Check Chromium rendering, input, and navigation |
+| `node native/scripts/tabs-profiles.mjs` | Check tabs, isolated Space profiles, and restoration |
+| `node native/scripts/sidebar-layout.mjs` | Check sidebar geometry and window controls |
+| `node native/scripts/features.mjs` | Check organization, split panes, downloads, settings, and swipes |
+| `npm run dev` | Run the Electron implementation with live React UI updates |
+| `npm run build` | Build the Electron implementation |
+| `npm test` | Run shared TypeScript unit tests |
+| `npm run build:icon` | Regenerate macOS icons |
 
-Native tests use temporary profiles and a local website fixture. Screenshots and benchmark output go in `test-results/`, which is ignored by Git. The broad native suite has intermittent macOS maximize/hover timing failures; see the [verification notes](docs/verification.md) for coverage and known limits.
+Run GUI tests sequentially; they create temporary profiles and local website fixtures. Native integration checks require `npm ci` for the test dependencies. The [native guide](native/README.md) includes pure Swift checks and verification limits. The [architecture guide](docs/architecture.md) covers both implementations.
 
-Packaging needs Electron Builder's downloadable tools. Signed and notarized distribution requires your own Developer ID credentials.
-
-See the [architecture guide](docs/architecture.md) for native views, profile storage, security boundaries, and performance tooling.
+Distribution signing and notarization require your own Developer ID credentials.
 
 ## Current limits
 
-Derivative is an early browser built around one main window. It does not yet include extensions, a password manager, private browsing, automatic updates, or automatic tab discarding. Some sign-in providers and DRM media may not work in an Electron browser.
+Derivative is an early browser built around one main window. It does not yet include extensions, a password manager, private browsing, automatic updates, or automatic tab discarding. Some sign-in providers and DRM media depend on the embedded Chromium distribution.
 
 Session restoration saves tab URLs, titles, and organization. Unsaved forms and back/forward history survive ordinary tab switches, but do not survive restarting the app. Download progress is available during the current session; durable download history and quit handling need more work.
