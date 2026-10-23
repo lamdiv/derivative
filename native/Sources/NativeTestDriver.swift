@@ -31,15 +31,52 @@ import Foundation
             case "dismissSearch": controller.closeSearch()
             case "submit": controller.navigate(command["input"] as? String ?? "", newTab: command["newTab"] as? Bool ?? true)
             case "toggleSidebar": controller.toggleSidebar()
+            case "revealSidebar": controller.setRevealed(command["visible"] as? Bool ?? true)
+            case "sidebarSize":
+                controller.store.state.preferences.sidebarSize = id
+                controller.layout()
+            case "expandedLayout":
+                // Exercise fullscreen composition without moving the user's desktop into a Space.
+                controller.model.expanded = command["expanded"] as? Bool ?? true
+                controller.model.pinned = !controller.model.expanded
+                controller.revealed = false
+                controller.layout()
+            case "resize":
+                controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
+                controller.layout()
             default: break
             }
+            controller.root.layoutSubtreeIfNeeded()
             let state = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(controller.store.state))) ?? [:]
             let bounds = controller.pageHost.frame
-            let reply: [String: Any] = ["state": state, "loadedPages": DerivativePageCount(), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden, "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": ["x": bounds.minX, "y": bounds.minY, "width": bounds.width, "height": bounds.height]]
+            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { type -> [String: Any]? in
+                guard let button = controller.window.standardWindowButton(type) else { return nil }
+                return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden]
+            }
+            let reply: [String: Any] = [
+                "state": state, "loadedPages": DerivativePageCount(),
+                "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
+                "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": rect(bounds),
+                "rootBounds": rect(controller.root.bounds), "sidebarBounds": rect(controller.sidebar.frame),
+                "sidebarControls": controls(in: controller.sidebar, controller: controller), "windowButtons": buttons
+            ]
             let result = directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of: ".command.json", with: ".result.json"))
             if let data = try? JSONSerialization.data(withJSONObject: reply) { try? data.write(to: result, options: .atomic) }
             if command["action"] as? String == "quit" { controller.window.performClose(nil) }
         }
+    }
+    private func rect(_ value: NSRect) -> [String: CGFloat] {
+        ["x": value.minX, "y": value.minY, "width": value.width, "height": value.height]
+    }
+    private func controls(in view: NSView, controller: BrowserController) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        if view.identifier?.rawValue == "sidebar-header-layout" {
+            result.append(["label": "header", "bounds": rect(controller.root.convert(view.bounds, from: view))])
+        }
+        for child in view.subviews {
+            result += controls(in: child, controller: controller)
+        }
+        return result
     }
     deinit { source?.cancel() }
 }

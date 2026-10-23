@@ -43,6 +43,7 @@ Install the root project's development dependencies (`npm ci`) for Playwright-ba
 ```sh
 node native/scripts/verify.mjs
 node native/scripts/tabs-profiles.mjs
+node native/scripts/sidebar-layout.mjs
 ```
 
 This launches a fresh native profile against a local HTTP fixture and checks rendering, text input, link navigation, back-navigation form restoration, absence of Node globals in website content, and clean shutdown. Set `KEEP_NATIVE=1` to leave the fixture running for UI inspection, then quit the app normally. Remote debugging is enabled only by the test launch flags.
@@ -57,6 +58,8 @@ native/build/state-tests
 ```
 
 The tabs/profile fixture checks live form retention, lazy restoration, per-Space cookie/storage isolation, view destruction, empty-Space search reuse, popup profile ownership, restart persistence, and multi-tab quit. It uses direct page-target CDP connections because CEF profiles have distinct debugger targets.
+
+The sidebar fixture measures actual AppKit/SwiftUI header frames and traffic-light alignment across all three widths and window sizes, including the minimum window with 12 favorites. It checks floating reveals and fullscreen composition without entering a separate macOS Space; native fullscreen animations and hover gestures still need a visual check.
 
 Automated windows refuse physical input and stay in the background. Isolated fixtures pass Chromium’s standard `--use-mock-keychain` test flag so they do not access the user’s Keychain; normal app launches do not use that flag. The native controller’s local test driver is enabled only by `DERIVATIVE_NATIVE_TEST_DIRECTORY`; it watches a private disposable directory and is absent from normal launches. It invokes native actions without exposing them to websites.
 

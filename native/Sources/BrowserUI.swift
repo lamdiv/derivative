@@ -35,6 +35,10 @@ import SwiftUI
         model = BrowserModel(store: store)
         window = BrowserWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         sidebar = NSHostingView(rootView: SidebarView(model: model))
+        // AppKit owns this frame, including the title-bar area. Letting the
+        // hosting view apply its own safe area offsets clips the header.
+        sidebar.safeAreaRegions = []
+        sidebar.sizingOptions = []
         super.init()
         model.pinned = store.state.preferences.sidebarMode == "fixed"; normalPinned = model.pinned
         window.title = "Derivative Native"; window.appearance = NSAppearance(named: .darkAqua)
@@ -107,9 +111,17 @@ import SwiftUI
             panel.frame = NSRect(x: max(24, (bounds.width-720)/2), y: top, width: min(720, bounds.width-48), height: bounds.height-top-24)
         }
         if !model.expanded {
-            for (index, type) in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].enumerated() {
-                if let button = window.standardWindowButton(type) {
-                    button.setFrameOrigin(NSPoint(x: 20+CGFloat(index)*20, y: button.superview!.bounds.height-30)); button.isHidden = sidebar.isHidden
+            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { window.standardWindowButton($0) }
+            // Showing native controls schedules a title-bar layout. Complete it
+            // before positioning, otherwise a floating reveal resets their row.
+            for button in buttons { button.isHidden = sidebar.isHidden }
+            buttons.first?.superview?.layoutSubtreeIfNeeded()
+            for (index, button) in buttons.enumerated() {
+                if let parent = button.superview {
+                    let target = NSRect(x: sidebar.frame.minX+14+CGFloat(index)*20,
+                                        y: sidebar.frame.minY+5+(28-button.frame.height)/2,
+                                        width: button.frame.width, height: button.frame.height)
+                    button.setFrameOrigin(parent.convert(target, from: root).origin)
                 }
             }
         }

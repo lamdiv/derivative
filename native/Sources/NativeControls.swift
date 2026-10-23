@@ -69,6 +69,11 @@ struct SidebarView: View {
                 Button(action: { DerivativeForward() }) { Image(systemName: "arrow.right") }.disabled(!model.canForward).accessibilityLabel("Go forward")
                 Button(action: { DerivativeReload() }) { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Reload page")
             }.font(.system(size: 15, weight: .medium)).frame(height: 28)
+                .background {
+                    if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil {
+                        SidebarLayoutProbe()
+                    }
+                }
             if model.store.active != nil {
                 Button(action: model.search) {
                     HStack(spacing: 9) {
@@ -120,13 +125,14 @@ struct SidebarView: View {
                 Spacer()
             }.frame(height: 28)
         }
-        .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 14)
+        .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 5).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(Color.white.opacity(0.9))
         .background {
             LinearGradient(colors: [model.accent.opacity(0.27), model.accent.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .background(Color(red: 0.12, green: 0.1, blue: 0.16)).background(.ultraThinMaterial)
         }
-        .preferredColorScheme(.dark).ignoresSafeArea()
+        .preferredColorScheme(.dark)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.13), lineWidth: 1))
     }
@@ -148,6 +154,16 @@ struct SidebarView: View {
             Button("Close tab") { model.closeTab(tab.id) }
         }
     }
+}
+
+// A passive frame marker for the isolated native layout fixture.
+private struct SidebarLayoutProbe: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.identifier = NSUserInterfaceItemIdentifier("sidebar-header-layout")
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {}
 }
 
 @MainActor final class SearchModel: ObservableObject {
