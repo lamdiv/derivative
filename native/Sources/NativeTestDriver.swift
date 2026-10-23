@@ -34,6 +34,8 @@ import Foundation
                 dropOperation = drop.canDrop ? (drop.operation == .copy ? "copy" : "move") : "none"
                 _ = drop.performTokenDrop(y: command["y"] as? Double ?? 0)
                 controller.model.dragging = nil
+            case "context.closeTools": DerivativeCloseDevTools()
+            case "context.command": _ = DerivativeTestContextCommand(Int32(command["command"] as? Int ?? 0))
             case "window.fullscreen": controller.maximizeWindowControl()
             case "window.minimize": controller.windowButtons[1].performClick(nil)
             case "window.restore": controller.window.deminiaturize(nil)
@@ -80,6 +82,8 @@ import Foundation
                 return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden, "hitTarget": hit === button]
             }
             let reply: [String: Any] = [
+                "devToolsOpen": DerivativeHasDevTools(),
+                "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
                 "windowFullscreen": controller.window.styleMask.contains(.fullScreen), "rootHidden": controller.root.isHidden, "rootAttached": controller.root.window === controller.window,
                 "windowMiniaturized": controller.window.isMiniaturized,

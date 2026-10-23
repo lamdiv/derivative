@@ -29,6 +29,11 @@ void DerivativeUpdateTab(const char* id, const char* title, const char* url, boo
 void DerivativeTabClosed(const char* id);
 void DerivativeFinishQuit(void);
 void DerivativeCancelQuit(void);
+void DerivativeContextAction(const char* opener, const char* value, const char* kind);
+const char* DerivativeContextMenuSnapshot(void);
+bool DerivativeTestContextCommand(int command);
+bool DerivativeHasDevTools(void);
+void DerivativeCloseDevTools(void);
 void DerivativeOpenPopup(const char* opener, const char* url);
 void DerivativeShowError(const char* message);
 void DerivativeTabError(const char* id, const char* message);

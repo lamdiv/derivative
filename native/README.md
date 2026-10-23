@@ -26,8 +26,9 @@ The signed app is assembled in a repository-specific temporary directory and lin
 - **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
 - **Settings:** light/dark/system appearances, pastel Space colors, search engine, restoration, browsing-data clearing, Space management, downloads, shortcuts, and About Derivative.
-- **Downloads:** an expandable sidebar section with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
+- **Downloads:** a floating panel above the footer button with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
 - **Keyboard:** Arc-style defaults, recent tabs across Spaces, reopen closed tabs, tab/Space cycling, numbered selection, hard reload, and URL copying. The complete reference is in Settings → Shortcuts.
+- **Webpage menus:** right-click links and images to open in a new tab or split view, save, copy, search by image, or inspect. Selected text offers web search; editable fields retain Chromium’s editing and spelling commands. Separate browser/private windows and a mini-browser are not implemented.
 - **Website handling:** HTTP(S) popups become tabs in their opener's profile; mail/telephone links require confirmation. Website permissions use native prompts. Failed pages show a native retry screen. Certificate validation remains enabled.
 
 Loaded background pages retain live form state while their views are detached. Restored tabs load lazily. Moving a tab to another Space reloads it under the destination profile. Metadata is written atomically. Restart restores URLs and organization, not unsaved forms or webpage navigation history. Split arrangements, recently closed tabs, and download history are session-only.
@@ -52,6 +53,7 @@ Run GUI fixtures sequentially. They use isolated profiles, a local HTTP server, 
 - `tabs-profiles.mjs`: lazy restore, retained forms, hidden background pages, view destruction, per-Space storage isolation, popup ownership, restart, and multi-tab quit.
 - `sidebar-animation.mjs`: real intermediate slide positions, rapid hover reversal, stable webpage bounds, and promotion from the empty page to regular search.
 - `sidebar-layout.mjs`: actual AppKit/SwiftUI header frames, traffic-light alignment after title-bar relayout, three widths, short windows, twelve favorites, floating reveal, and fullscreen composition without changing the desktop Space.
+- `context-menu.mjs`: real Chromium context targets, link and split actions, image downloads, editing/selection menus, and developer tools.
 - `features.mjs`: favorites/folders, split attachment and sizing, settings/themes, recent/reopened tabs, downloaded bytes and cancellation, profile-safe moves, scoped search, swipe edges, Space management, cookie/history/cache clearing, and quit.
 
 Pure Swift checks:

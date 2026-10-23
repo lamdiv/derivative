@@ -240,3 +240,16 @@ import SwiftUI
     override func accessibilityLabel() -> String? { "Resize split view" }
     override func accessibilityRole() -> NSAccessibility.Role? { .splitter }
 }
+
+@_cdecl("DerivativeContextAction") @MainActor func contextAction(_ opener: UnsafePointer<CChar>, _ value: UnsafePointer<CChar>, _ kind: UnsafePointer<CChar>) {
+    guard let controller = currentController, let tab = controller.store.state.tabs.first(where: { $0.id == String(cString: opener) }) else { return }
+    let action = String(cString: kind), input = String(cString: value)
+    var url = input
+    if action == "search" {
+        var parts = URLComponents(string: controller.store.state.preferences.searchEngine == "duckduckgo" ? "https://duckduckgo.com/" : "https://www.google.com/search")!
+        parts.queryItems = [URLQueryItem(name: "q", value: input)]; url = parts.url!.absoluteString
+    }
+    guard let id = controller.store.open(url, spaceId: tab.spaceId) else { return }
+    if action == "split" { controller.perform("split.open", ["id": id, "withId": tab.id]) }
+    else { controller.showActive() }
+}

@@ -55,6 +55,8 @@ npm run dev
 
 **Split view.** Drop a tab onto the center of another tab, or use its context menu to split. The top and bottom edges still reorder tabs. Click either page to focus it, drag the divider to resize, or right-click the joined row to separate the tabs. Split arrangements are temporary, while the underlying tabs persist.
 
+**Webpage menus.** Right-click links, images, or selected text to open, split, save, copy, search, or inspect. Editable fields keep their standard editing commands.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |

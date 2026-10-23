@@ -11,6 +11,7 @@
 #include "include/cef_app.h"
 #include "include/cef_application_mac.h"
 #include "include/cef_client.h"
+#include "include/cef_context_menu_handler.h"
 #include "include/cef_command_line.h"
 #include "include/cef_parser.h"
 #include "include/cef_download_item.h"
@@ -83,6 +84,7 @@ void External(const CefString& value) {
   alert.informativeText = [text substringToIndex:MIN(text.length, 300)]; [alert addButtonWithTitle:@"Cancel"]; [alert addButtonWithTitle:@"Open"];
   [alert beginSheetModalForWindow:host.window completionHandler:^(NSModalResponse response) { if (response == NSAlertSecondButtonReturn) [[NSWorkspace sharedWorkspace] openURL:url]; }];
 }
+#include "WebContextMenu.h"
 void Publish(const std::string& id) {
   CEF_REQUIRE_UI_THREAD();
   auto found = pages.find(id); if (found == pages.end()) return;
@@ -99,11 +101,12 @@ void FinishIfClosed() {
     CefPostTask(TID_UI, new QuitTask());
   }
 }
-class BrowserClient final : public CefClient, public CefLifeSpanHandler,
+class BrowserClient final : public CefClient, public WebContextMenus, public CefLifeSpanHandler,
     public CefDisplayHandler, public CefLoadHandler, public CefKeyboardHandler,
     public CefRequestHandler, public CefDownloadHandler, public CefJSDialogHandler, public CefFocusHandler, public CefPermissionHandler {
  public:
-  explicit BrowserClient(std::string id) : id_(std::move(id)) {}
+  explicit BrowserClient(std::string id) : WebContextMenus(id), id_(std::move(id)) {}
+  CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override { return this; }
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
@@ -409,3 +412,25 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
+
+extern "C" const char* DerivativeContextMenuSnapshot() {
+  static std::string json;
+  auto result = CefDictionaryValue::Create(); auto items = CefListValue::Create();
+  result->SetString("opener", lastMenuTarget.opener); result->SetInt("generation", menuGeneration);
+  if (getenv("DERIVATIVE_NATIVE_AUTOMATED") && getenv("DERIVATIVE_NATIVE_TEST_DIRECTORY")) result->SetBool("imageCopied", [ImageClipboard() dataForType:NSPasteboardTypePNG].length > 0);
+  for (size_t i = 0; i < lastMenuItems.size(); ++i) {
+    auto item = CefDictionaryValue::Create(); item->SetInt("id", lastMenuItems[i].first); item->SetString("label", lastMenuItems[i].second); items->SetDictionary(i, item);
+  }
+  result->SetList("items", items); auto value = CefValue::Create(); value->SetDictionary(result);
+  json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString(); return json.c_str();
+}
+extern "C" bool DerivativeTestContextCommand(int command) {
+  if (!getenv("DERIVATIVE_NATIVE_TEST_DIRECTORY")) return false;
+  const auto found = pages.find(lastMenuTarget.opener);
+  if (found == pages.end() || !found->second.browser) return false;
+  bool offered = false; for (const auto& item : lastMenuItems) if (item.first == command) offered = true;
+  return offered && ExecuteWebMenu(found->second.browser, lastMenuTarget, command);
+}
+
+extern "C" bool DerivativeHasDevTools() { auto browser = Active(); return browser && browser->GetHost()->HasDevTools(); }
+extern "C" void DerivativeCloseDevTools() { if (auto browser = Active()) browser->GetHost()->CloseDevTools(); }
