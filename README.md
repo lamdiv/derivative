@@ -10,6 +10,8 @@ Derivative brings your tabs, favorite places, and separate browsing profiles int
 
 **Early development · macOS · Apple Silicon**
 
+A [native SwiftUI/AppKit + Chromium prototype](native/README.md) is being developed alongside the Electron app. It is an experimental migration path; the feature descriptions below refer to the Electron version.
+
 ## A place for every part of your day
 
 - **Spaces with separate sign-ins.** Each Space has its own persistent cookies and website storage. Swipe across the sidebar or use the bottom icons to switch.
