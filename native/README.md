@@ -45,6 +45,7 @@ node native/scripts/tabs-profiles.mjs
 node native/scripts/sidebar-layout.mjs
 node native/scripts/sidebar-animation.mjs
 node native/scripts/features.mjs
+node native/scripts/context-menu.mjs
 ```
 
 Run GUI fixtures sequentially. They use isolated profiles, a local HTTP server, and Chromium's test-only mock Keychain option. Automated windows stay in the background and ignore physical input. A private test-directory driver invokes native actions; no privileged interface is exposed to websites. Real page state is checked over per-page CDP connections.
