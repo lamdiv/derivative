@@ -358,7 +358,7 @@ struct SearchSuggestion: Identifiable {
     func matches(_ title: String, _ url: String) -> Bool { q.isEmpty || (title+" "+url).localizedCaseInsensitiveContains(q) }
     var results = store.currentTabs.filter { matches($0.title, $0.url) }.sorted { $0.lastActive > $1.lastActive }.prefix(5).map { SearchSuggestion(id: $0.id, title: $0.title, detail: ($0.id == store.state.activeTabId ? "Current tab" : "Switch to tab")+" · "+$0.url, url: $0.url, kind: "tab") }
     let urls = Set(results.map(\.url))
-    if store.active != nil { results += store.state.history.filter { !urls.contains($0.url) && matches($0.title, $0.url) }.prefix(4).map { SearchSuggestion(id: "history:"+$0.url, title: $0.title, detail: "History · "+$0.url, url: $0.url, kind: "history") } }
+    if store.active != nil || !q.isEmpty { results += store.state.history.filter { !urls.contains($0.url) && matches($0.title, $0.url) }.prefix(4).map { SearchSuggestion(id: "history:"+$0.url, title: $0.title, detail: "History · "+$0.url, url: $0.url, kind: "history") } }
     if !q.isEmpty, let url = SavedBrowserState.resolve(q, engine: store.state.preferences.searchEngine) {
         let web = !q.contains(where: \.isWhitespace) && (q.contains(".") || q.hasPrefix("http") || q.hasPrefix("localhost"))
         if web && !results.contains(where: { $0.url == url.absoluteString }) { results.insert(SearchSuggestion(id: "url", title: url.host ?? q, detail: "Open website · "+url.absoluteString, url: url.absoluteString, kind: "url"), at: 0) }

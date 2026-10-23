@@ -250,6 +250,7 @@ class BrowserClient final : public CefClient, public CefLifeSpanHandler,
   bool OnPreKeyEvent(CefRefPtr<CefBrowser>, const CefKeyEvent& event, CefEventHandle, bool*) override {
     const auto flags = event.modifiers;
     const int code = event.windows_key_code;
+    if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_COMMAND_DOWN) && (flags & EVENTFLAG_CONTROL_DOWN) && !(flags & (EVENTFLAG_ALT_DOWN | EVENTFLAG_SHIFT_DOWN)) && code == 'F') { DerivativeShortcut(1111); return true; }
     if (event.type == KEYEVENT_KEYUP && code == 17) { DerivativeShortcut(1110); return false; }
     if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_CONTROL_DOWN) && !(flags & (EVENTFLAG_COMMAND_DOWN | EVENTFLAG_ALT_DOWN)) && code == 9) { DerivativeShortcut(flags & EVENTFLAG_SHIFT_DOWN ? 1101 : 1100); return true; }
     if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_COMMAND_DOWN) && !(flags & EVENTFLAG_CONTROL_DOWN)) {

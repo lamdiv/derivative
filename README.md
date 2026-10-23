@@ -51,7 +51,7 @@ npm run dev
 
 **Folders and favorites.** Use the menu beside the Space name to create a folder. Drag tabs into Pinned or a folder, or onto a Space icon to move and pin them there. Use the controls above the favorites grid to add or edit favorites. Right-click menus offer the same everyday actions without dragging.
 
-**Search.** **⌘T** opens the floating search panel over a webpage. If you're already on an empty New Tab page, it focuses the existing search field. **⌘L** edits the current address. Choose a tab result to switch to it, or use its close control to close it. Empty Spaces omit history suggestions. Escape dismisses the panel without creating a tab.
+**Search.** **⌘T** opens the floating search panel over a webpage. If you're already on an empty New Tab page, it focuses the existing search field. **⌘L** edits the current address. Choose a tab result to switch to it, or use its close control to close it. Empty Spaces show history matches only after typing. Escape dismisses the panel without creating a tab.
 
 **Split view.** Drop a tab onto the center of another tab, or use its context menu to split. The top and bottom edges still reorder tabs. Click either page to focus it, drag the divider to resize, or right-click the joined row to separate the tabs. Split arrangements are temporary, while the underlying tabs persist.
 

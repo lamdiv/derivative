@@ -34,7 +34,11 @@ import Foundation
                 dropOperation = drop.canDrop ? (drop.operation == .copy ? "copy" : "move") : "none"
                 _ = drop.performTokenDrop(y: command["y"] as? Double ?? 0)
                 controller.model.dragging = nil
+            case "window.fullscreen": controller.maximizeWindowControl()
+            case "window.minimize": controller.windowButtons[1].performClick(nil)
+            case "window.restore": controller.window.deminiaturize(nil)
             case "downloads.toggle": controller.model.downloadsExpanded.toggle()
+            case "homeQuery": controller.homeSearch.query = command["query"] as? String ?? ""
             case "searchQuery": controller.searchModel?.query = command["query"] as? String ?? ""
             case "search": controller.showSearch(edit: command["edit"] as? Bool ?? false)
             case "dismissSearch": controller.closeSearch()
@@ -70,12 +74,15 @@ import Foundation
             controller.root.layoutSubtreeIfNeeded()
             let state = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(controller.store.state))) ?? [:]
             let bounds = controller.pageHost.frame
-            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { type -> [String: Any]? in
-                guard let button = controller.window.standardWindowButton(type) else { return nil }
-                return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden]
+            let buttons = controller.windowButtons.map { button -> [String: Any] in
+                let center = controller.root.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), from: button)
+                let hit = controller.root.hitTest(controller.root.convert(center, to: controller.root.superview))
+                return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden, "hitTarget": hit === button]
             }
             let reply: [String: Any] = [
                 "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
+                "windowFullscreen": controller.window.styleMask.contains(.fullScreen), "rootHidden": controller.root.isHidden, "rootAttached": controller.root.window === controller.window,
+                "windowMiniaturized": controller.window.isMiniaturized,
                 "downloadsExpanded": controller.model.downloadsExpanded, "sidebarTransitioning": controller.sidebarTransitioning,
                 "sidebarPresentationX": controller.sidebar.layer?.presentation()?.frame.minX ?? controller.sidebar.frame.minX,
                 "splitIDs": controller.model.splitIDs, "overlay": controller.overlayKind,

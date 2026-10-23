@@ -23,7 +23,7 @@ The signed app is assembled in a repository-specific temporary directory and lin
 - **Tabs and folders:** pin, duplicate, close, reopen, reorder, and move tabs. The menu beside the Space name creates folders. Drop tabs into a folder, Pinned, Today, or another Space. Right-click menus provide the same organization actions.
 - **Spaces:** each Space has separate persistent cookies and website storage. Create, rename, recolor, delete empty Spaces, and drag to reorder their icons. Horizontal sidebar swipes animate the change and resist at either end.
 - **Split view:** drop onto the middle of another tab to join two live pages. The top and bottom edges reorder instead. A joined sidebar row stays in the original tab section and uses website icons and titles. Click either page to focus it, drag the divider to resize, and right-click the joined row to separate or close panes.
-- **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces omit history suggestions. Results have close controls. Empty Spaces reuse their existing search field and create a tab only after confirmation.
+- **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
 - **Settings:** light/dark/system appearances, pastel Space colors, search engine, restoration, browsing-data clearing, Space management, downloads, shortcuts, and About Derivative.
 - **Downloads:** an expandable sidebar section with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
@@ -50,7 +50,7 @@ Run GUI fixtures sequentially. They use isolated profiles, a local HTTP server, 
 
 - `verify.mjs`: rendering, input, navigation, live form restoration, absence of Node globals, and shutdown.
 - `tabs-profiles.mjs`: lazy restore, retained forms, hidden background pages, view destruction, per-Space storage isolation, popup ownership, restart, and multi-tab quit.
-- `sidebar-animation.mjs`: real intermediate slide positions, rapid hover reversal, stable webpage bounds, and empty-Space history suppression.
+- `sidebar-animation.mjs`: real intermediate slide positions, rapid hover reversal, stable webpage bounds, and promotion from the empty page to regular search.
 - `sidebar-layout.mjs`: actual AppKit/SwiftUI header frames, traffic-light alignment after title-bar relayout, three widths, short windows, twelve favorites, floating reveal, and fullscreen composition without changing the desktop Space.
 - `features.mjs`: favorites/folders, split attachment and sizing, settings/themes, recent/reopened tabs, downloaded bytes and cancellation, profile-safe moves, scoped search, swipe edges, Space management, cookie/history/cache clearing, and quit.
 

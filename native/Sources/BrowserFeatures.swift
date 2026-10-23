@@ -190,6 +190,7 @@ import SwiftUI
             let count = nativeSuggestions(search.query, store: store).count
             if count > 0 { search.selected = (search.selected+(event.keyCode == 125 ? 1 : -1)+count)%count; return true }
         }
+        if flags.contains([.control, .command]), !flags.contains(.option), !flags.contains(.shift), key == "f" { maximizeWindowControl(); return true }
         if flags.contains(.control), !flags.contains(.command), !flags.contains(.option) {
             if event.keyCode == 48 { recent(flags.contains(.shift) ? -1 : 1); return true }
             if !flags.contains(.shift), let number = Int(key), (1...9).contains(number), store.state.spaces.indices.contains(number-1) { selectSpace(store.state.spaces[number-1].id); return true }

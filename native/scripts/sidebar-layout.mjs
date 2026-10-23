@@ -40,8 +40,10 @@ function header(snapshot, expanded = false) {
   near(row.x, sidebar.x + 14, 'Header horizontal inset');
   near(row.width, sidebar.width - 28, 'Header width');
   if (!expanded) {
+    assert.equal(snapshot.windowButtons.length, 3, 'All native window controls must remain available');
     for (const [index, button] of snapshot.windowButtons.entries()) {
       assert.equal(button.hidden, false);
+      assert.equal(button.hitTarget, true, 'Traffic-light clicks must reach the actual native button');
       near(button.bounds.y + button.bounds.height / 2, row.y + row.height / 2, 'Traffic lights and navigation must share a center line');
       near(button.bounds.x, sidebar.x + 14 + index * 20, 'Traffic-light spacing');
     }
@@ -50,6 +52,10 @@ function header(snapshot, expanded = false) {
 try {
   header(await command(driver, 'snapshot'));
   header(await command(driver, 'relayoutTitlebar'));
+  await command(driver, 'window.minimize');
+  assert.equal((await command(driver, 'snapshot')).windowMiniaturized, true, 'Yellow native button must minimize the window');
+  await command(driver, 'window.restore');
+  assert.equal((await command(driver, 'snapshot')).windowMiniaturized, false);
   for (const [size, width] of [['compact', 252], ['comfortable', 288], ['wide', 320]]) {
     await command(driver, 'sidebarSize', { id: size });
     for (const [windowWidth, height] of [[700, 480], [1280, 840], [900, 600]]) {

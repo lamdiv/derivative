@@ -19,11 +19,13 @@ import QuartzCore
     let sidebar = FlippedView()
     let sidebarContent: NSHostingView<SidebarView>
     let scrim = FlippedView()
+    var windowButtons: [NSButton] = []
     let homeSearch = SearchModel(query: "")
     var home: NSHostingView<HomeView>!
     var searchPanel: NSHostingView<SearchView>?
     var searchModel: SearchModel?
     var searchObservation: AnyCancellable?
+    var homeObservation: AnyCancellable?
     var searchEditsCurrent = false
     var monitor: Any?
     var hideWork: DispatchWorkItem?
@@ -72,10 +74,27 @@ import QuartzCore
         sidebar.wantsLayer = true
         sidebar.addSubview(sidebarContent); sidebarContent.autoresizingMask = [.width, .height]
         root.addSubview(pageHost); root.addSubview(sidebar)
+        // Native AppKit controls in the content hierarchy avoid the title bar's
+        // clipped hit area and automatic repositioning during sidebar reveals.
+        let controlTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        windowButtons = controlTypes.compactMap { NSWindow.standardWindowButton($0, for: window.styleMask) }
+        for (index, button) in windowButtons.enumerated() {
+            button.target = self
+            button.action = [#selector(closeWindowControl), #selector(minimizeWindowControl), #selector(maximizeWindowControl)][index]
+            button.translatesAutoresizingMaskIntoConstraints = true; button.autoresizingMask = []
+            root.addSubview(button)
+        }
         splitDivider.addGestureRecognizer(NSPanGestureRecognizer(target: self, action: #selector(resizeSplit(_:))))
         pageHost.addSubview(splitDivider)
         home = NSHostingView(rootView: HomeView(model: model, search: homeSearch, submit: { [weak self] in self?.navigate($0, newTab: true) }, choose: { [weak self] in self?.selectTab($0) }))
         pageHost.addSubview(home); home.autoresizingMask = [.width, .height]
+        homeObservation = homeSearch.$query.dropFirst().sink { [weak self] query in
+            guard !query.isEmpty else { return }
+            DispatchQueue.main.async {
+                guard let self, self.store.active == nil, self.searchPanel == nil, !self.home.isHidden else { return }
+                self.showSearch(edit: false, initialQuery: self.homeSearch.query)
+            }
+        }
         scrim.wantsLayer = true; scrim.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.07).cgColor
         model.search = { [weak self] in self?.showSearch(edit: true) }
         model.newSearch = { [weak self] in self?.showSearch(edit: false) }
@@ -163,22 +182,27 @@ import QuartzCore
         if ready { DerivativeLayoutPages(); layoutErrors() }
         alignWindowButtons()
     }
+    @objc func closeWindowControl() { window.performClose(nil) }
+    @objc func restoreWindowControl() { window.deminiaturize(nil); window.makeKeyAndOrderFront(nil) }
+    @objc func zoomWindowControl() { window.performZoom(nil) }
+    @objc func minimizeWindowControl() { window.miniaturize(nil) }
+    @objc func maximizeWindowControl() {
+        if NSApp.currentEvent?.modifierFlags.contains(.option) == true { window.performZoom(nil) }
+        else { window.toggleFullScreen(nil) }
+    }
     func alignWindowButtons() {
         if !model.expanded {
-            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { window.standardWindowButton($0) }
-            // Showing native controls schedules a title-bar layout. Complete it
-            // before positioning, otherwise a floating reveal resets their row.
-            for button in buttons where button.isHidden != (sidebar.isHidden || sidebarTransitioning) { button.isHidden = sidebar.isHidden || sidebarTransitioning }
-            buttons.first?.superview?.layoutSubtreeIfNeeded()
-            for (index, button) in buttons.enumerated() {
-                if let parent = button.superview {
-                    let target = NSRect(x: sidebar.frame.minX+14+CGFloat(index)*20,
-                                        y: sidebar.frame.minY+14+(28-button.frame.height)/2,
-                                        width: button.frame.width, height: button.frame.height)
-                    let origin = parent.convert(target, from: root).origin
-                    if button.frame.origin != origin { button.setFrameOrigin(origin) }
-                }
+            for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                if let button = window.standardWindowButton(type), !button.isHidden { button.isHidden = true }
             }
+        }
+        for (index, button) in windowButtons.enumerated() {
+            button.isHidden = model.expanded || sidebar.isHidden || sidebarTransitioning
+            button.setFrameOrigin(NSPoint(x: sidebar.frame.minX+14+CGFloat(index)*20,
+                                          y: sidebar.frame.minY+14+(28-button.frame.height)/2))
+        }
+        if Array(root.subviews.suffix(windowButtons.count)) != windowButtons {
+            for button in windowButtons { root.addSubview(button, positioned: .above, relativeTo: nil) }
         }
     }
     func showActive(preserveSearch: Bool = false) {
@@ -278,11 +302,12 @@ import QuartzCore
     @objc func reload() { DerivativeReload() }
     @objc func back() { DerivativeBack() }
     @objc func forward() { DerivativeForward() }
-    func showSearch(edit: Bool) {
+    func showSearch(edit: Bool, initialQuery: String? = nil) {
         hideWork?.cancel(); hideWork = nil
-        guard store.active != nil else { focusSearch(in: home, select: true); return }
+        guard store.active != nil || initialQuery != nil else { focusSearch(in: home, select: true); return }
         closeOverlay(focus: false); searchEditsCurrent = edit
-        let search = SearchModel(query: edit ? model.address : ""); searchModel = search
+        let search = SearchModel(query: initialQuery ?? (edit ? model.address : "")); searchModel = search
+        if store.active == nil { home.isHidden = true }
         searchObservation = search.$query.dropFirst().sink { [weak self] _ in DispatchQueue.main.async { self?.layout() } }
         let panel = NSHostingView(rootView: SearchView(model: search, browser: model, submit: { [weak self] text in self?.navigate(text, newTab: !edit) }, dismiss: { [weak self] in self?.closeSearch() }, choose: { [weak self] in self?.selectTab($0) }))
         panel.safeAreaRegions = []; panel.sizingOptions = []
@@ -301,6 +326,7 @@ import QuartzCore
     }
     func closeSearch(focus: Bool = true) {
         searchObservation = nil; searchPanel?.removeFromSuperview(); searchPanel = nil; searchModel = nil; scrim.removeFromSuperview()
+        if store.active == nil { homeSearch.query = ""; homeSearch.selected = 0; home.isHidden = false }
         if focus { if store.active != nil { DerivativeFocusPage() } else { focusSearch(in: home, select: false) } }
     }
     func navigate(_ text: String, newTab: Bool) {
@@ -334,6 +360,7 @@ import QuartzCore
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
         hideWork?.cancel()
     }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { restoreWindowControl(); return true }
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
     private func installMenu() {
         let menu = NSMenu()
@@ -351,6 +378,10 @@ import QuartzCore
         for (label, action, key) in [("Undo", "undo:", "z"), ("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] { edit.submenu?.addItem(withTitle: label, action: Selector(action), keyEquivalent: key) }
         menu.addItem(edit)
         section("View", [("Toggle Sidebar", #selector(toggleSidebar), "s"), ("Pin Tab", #selector(pinActiveTab), "d"), ("Reload", #selector(reload), "r"), ("Back", #selector(back), "["), ("Forward", #selector(forward), "]")])
+        section("Window", [("Minimize", #selector(minimizeWindowControl), "m"), ("Zoom", #selector(zoomWindowControl), ""), ("Bring to Front", #selector(restoreWindowControl), "")])
+        let fullscreen = NSMenuItem(title: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        fullscreen.target = window; fullscreen.keyEquivalentModifierMask = [.control, .command]
+        menu.items.first(where: { $0.submenu?.title == "View" })?.submenu?.addItem(fullscreen)
         let reopen = NSMenuItem(title: "Reopen Closed Tab", action: #selector(reopenTab), keyEquivalent: "t"); reopen.target = self; reopen.keyEquivalentModifierMask = [.command, .shift]; menu.items.first(where: { $0.submenu?.title == "File" })?.submenu?.addItem(reopen)
         NSApp.mainMenu = menu
     }
@@ -383,6 +414,7 @@ import QuartzCore
     case 1105: controller.stepTab(-1)
     case 1106: controller.stepTab(1)
     case 1110: controller.commitRecent()
+    case 1111: controller.maximizeWindowControl()
     case 1200: controller.stepSpace(-1)
     case 1201: controller.stepTab(-1)
     case 1202: controller.stepSpace(1)
