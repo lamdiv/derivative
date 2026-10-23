@@ -1,13 +1,33 @@
 import AppKit
 import SwiftUI
 import Combine
+import UniformTypeIdentifiers
 
+struct BrowserDownload: Identifiable {
+    var id: String, name: String, path: String, status: String
+    var received: Double, total: Double
+}
 @MainActor final class BrowserModel: ObservableObject {
     let store: BrowserStore
     private var subscription: AnyCancellable?
     @Published var expanded = false
     @Published var pinned = true
+    @Published var expandedSidebarMode = "hover"
+    var effectiveSidebarMode: String { expanded ? expandedSidebarMode : store.state.preferences.sidebarMode }
+    @Published var dark = true
     @Published var error = ""
+    @Published var splitIDs: [String] = []
+    @Published var swipeOffset: CGFloat = 0
+    @Published var swipeEdge: String?
+    @Published var dragging: String?
+    @Published var dropTarget: String?
+    @Published var downloads: [BrowserDownload] = []
+    @Published var settingsSection = "General"
+    @Published var newSpaceName = ""
+    @Published var newSpaceColor = "blush"
+    @Published var recentIDs: [String] = []
+    @Published var recentIndex = 0
+    var action: (String, [String: String]) -> Void = { _, _ in }
     var search: () -> Void = {}
     var newSearch: () -> Void = {}
     var toggle: () -> Void = {}
@@ -20,6 +40,9 @@ import Combine
     var address: String { store.active?.url ?? "" }
     var canBack: Bool { store.active?.canBack ?? false }
     var canForward: Bool { store.active?.canForward ?? false }
+    var ink: Color { dark ? .white.opacity(0.9) : Color(red: 0.19, green: 0.15, blue: 0.25) }
+    var surface: Color { dark ? Color(red: 0.16, green: 0.14, blue: 0.21) : Color(red: 0.97, green: 0.95, blue: 0.99) }
+    var wash: Color { dark ? .white.opacity(0.07) : .white.opacity(0.4) }
     var accent: Color {
         switch store.space.color {
         case "mint": return Color(red: 0.5, green: 0.74, blue: 0.62)
@@ -33,12 +56,20 @@ import Combine
         self.store = store
         subscription = store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
+    func send(_ name: String, id: String = "", _ values: [String: String] = [:]) { var values = values; values["id"] = id; action(name, values) }
     func pin(_ id: String) {
         guard let index = store.state.tabs.firstIndex(where: { $0.id == id }) else { return }
-        store.state.tabs[index].pinned.toggle(); store.state.tabs[index].favoriteId = nil; store.persist()
+        store.state.tabs[index].pinned.toggle(); store.state.tabs[index].favoriteId = nil; store.state.tabs[index].folderId = nil; store.persist()
+    }
+    func provider(_ token: String) -> NSItemProvider { dragging = token; return NSItemProvider(object: token as NSString) }
+}
+struct SpaceGlyph: View {
+    let icon: String
+    var body: some View {
+        if NSImage(systemSymbolName: icon, accessibilityDescription: nil) != nil { Image(systemName: icon) }
+        else { Text(icon) }
     }
 }
-
 struct SiteIcon: View {
     let url: String
     let title: String
@@ -51,29 +82,15 @@ struct SiteIcon: View {
     var body: some View {
         AsyncImage(url: favicon) { phase in
             if let image = phase.image { image.resizable().scaledToFit() }
-            else { Text(String(title.prefix(1)).uppercased()).font(.system(size: size*0.7, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity).background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 4)) }
+            else { Text(String(title.prefix(1)).uppercased()).font(.system(size: size*0.7, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity).background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4)) }
         }.frame(width: size, height: size).accessibilityHidden(true)
     }
 }
-
 struct SidebarView: View {
     @ObservedObject var model: BrowserModel
-    private var regular: [BrowserTab] { model.store.currentTabs.filter { $0.favoriteId == nil } }
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
-            HStack(spacing: 8) {
-                if !model.expanded { Spacer().frame(width: 64) }
-                Button(action: model.toggle) { Image(systemName: "sidebar.left") }.help("Show or hide sidebar · ⌘S").accessibilityLabel("Toggle sidebar")
-                Spacer(minLength: 8)
-                Button(action: { DerivativeBack() }) { Image(systemName: "arrow.left") }.disabled(!model.canBack).accessibilityLabel("Go back")
-                Button(action: { DerivativeForward() }) { Image(systemName: "arrow.right") }.disabled(!model.canForward).accessibilityLabel("Go forward")
-                Button(action: { DerivativeReload() }) { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Reload page")
-            }.font(.system(size: 15, weight: .medium)).frame(height: 28)
-                .background {
-                    if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil {
-                        SidebarLayoutProbe()
-                    }
-                }
+            header
             if model.store.active != nil {
                 Button(action: model.search) {
                     HStack(spacing: 9) {
@@ -81,62 +98,124 @@ struct SidebarView: View {
                         Text(model.address).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: 0)
                         Text("⌘L").font(.system(size: 10)).foregroundStyle(.secondary)
-                    }.font(.system(size: 12)).padding(11).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
+                    }.font(.system(size: 12)).padding(11).background(model.wash, in: RoundedRectangle(cornerRadius: 11))
                 }.accessibilityLabel("Edit address")
             }
-            Text("Favorites").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3), spacing: 7) {
-                ForEach(model.store.state.favorites) { favorite in
-                    Button { model.openFavorite(favorite.id) } label: {
-                        SiteIcon(url: favorite.url, title: favorite.name, size: 22)
-                            .frame(maxWidth: .infinity).frame(height: 43)
-                            .background(.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 11))
-                            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(model.store.active?.favoriteId == favorite.id ? model.accent.opacity(0.8) : .clear, lineWidth: 1.5))
-                    }.help(favorite.name).accessibilityLabel("Open favorite \(favorite.name)")
-                }
-            }
-            HStack(spacing: 8) {
-                Image(systemName: model.store.space.icon).foregroundStyle(model.accent)
-                Text(model.store.space.name).font(.system(size: 13, weight: .semibold))
-                Spacer()
-            }.padding(.top, 6)
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    if regular.contains(where: \.pinned) {
-                        Label("Pinned", systemImage: "pin").font(.system(size: 10)).foregroundStyle(.secondary).padding(.vertical, 6)
-                        ForEach(regular.filter(\.pinned)) { tabRow($0) }
-                        Divider().opacity(0.3).padding(.vertical, 6)
+                VStack(alignment: .leading, spacing: 13) {
+                    HStack { Text("Favorites").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary); Spacer()
+                        if model.store.state.favorites.count < 12 { Button { model.send("favorite.edit") } label: { Image(systemName: "plus").font(.system(size: 11)) }.accessibilityLabel("Add favorite") }
                     }
-                    ForEach(regular.filter { !$0.pinned }) { tabRow($0) }
-                    if model.store.active != nil {
-                        Button(action: model.newSearch) { Label("New tab", systemImage: "plus").font(.system(size: 12)).foregroundStyle(.secondary).padding(10) }.accessibilityLabel("New tab")
+                    favorites
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            SpaceGlyph(icon: model.store.space.icon).foregroundStyle(model.accent)
+                            Text(model.store.space.name).font(.system(size: 13, weight: .semibold))
+                            Spacer()
+                            Menu { Button("New folder") { model.send("folder.create") }; Button("Rename Space") { model.send("space.rename", id: model.store.space.id) }; Button("Space settings") { model.settingsSection = "Spaces"; model.send("settings") } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 22)
+                        }.padding(.vertical, 6)
+                        if model.splitIDs.count == 2 { splitGroup }
+                        groupLabel("Pinned", pinned: true)
+                        ForEach(visibleTabs.filter { $0.pinned && $0.folderId == nil }) { NativeTabRow(model: model, tab: $0) }
+                        ForEach(model.store.state.folders.filter { $0.spaceId == model.store.state.activeSpaceId }) { folder in FolderRow(model: model, folder: folder) }
+                        Divider().opacity(0.25).padding(.vertical, 4)
+                        groupLabel("Today", pinned: false)
+                        ForEach(visibleTabs.filter { !$0.pinned }) { NativeTabRow(model: model, tab: $0) }
+                        if model.store.active != nil && model.store.active?.favoriteId == nil {
+                            Button(action: model.newSearch) { Label("New tab", systemImage: "plus").font(.system(size: 12)).foregroundStyle(.secondary).padding(10) }.accessibilityLabel("New tab")
+                        }
+                        if visibleTabs.isEmpty && model.store.active == nil { Text("A little room for something new.").font(.system(size: 11)).foregroundStyle(.secondary).padding(.vertical, 14) }
                     }
-                }
+                }.padding(.bottom, 4).offset(x: model.swipeOffset)
             }.scrollIndicators(.hidden)
+            if let edge = model.swipeEdge { Text(edge).font(.system(size: 10)).foregroundStyle(.secondary).frame(maxWidth: .infinity).transition(.opacity) }
             if !model.error.isEmpty { Text(model.error).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3) }
-            HStack {
-                Spacer()
-                ForEach(model.store.state.spaces) { space in
-                    Button { model.selectSpace(space.id) } label: {
-                        Image(systemName: space.icon).font(.system(size: 13)).frame(width: 27, height: 27)
-                            .background(.white.opacity(model.store.state.activeSpaceId == space.id ? 0.12 : 0), in: RoundedRectangle(cornerRadius: 8))
-                    }.help(space.name).accessibilityLabel("Switch to \(space.name) Space")
-                }
-                Spacer()
-            }.frame(height: 28)
+            footer
         }
         .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 5).padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .foregroundStyle(Color.white.opacity(0.9))
+        .foregroundStyle(model.ink)
         .background {
-            LinearGradient(colors: [model.accent.opacity(0.27), model.accent.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .background(Color(red: 0.12, green: 0.1, blue: 0.16)).background(.ultraThinMaterial)
+            LinearGradient(colors: [model.accent.opacity(model.dark ? 0.27 : 0.65), model.accent.opacity(model.dark ? 0.12 : 0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                .background(model.dark ? Color(red: 0.12, green: 0.1, blue: 0.16) : Color(red: 0.85, green: 0.82, blue: 0.9)).background(.ultraThinMaterial)
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(model.dark ? .dark : .light)
         .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.13), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(model.dark ? 0.13 : 0.4), lineWidth: 1))
+        .animation(.easeOut(duration: 0.16), value: model.store.state.favorites.map(\.id))
+        .animation(.easeOut(duration: 0.16), value: model.store.state.activeSpaceId)
     }
-    private func tabRow(_ tab: BrowserTab) -> some View {
+    private var visibleTabs: [BrowserTab] { model.store.currentTabs.filter { $0.favoriteId == nil && !model.splitIDs.contains($0.id) } }
+    private var header: some View {
+        HStack(spacing: 8) {
+            if !model.expanded { Spacer().frame(width: 64) }
+            Button(action: model.toggle) { Image(systemName: "sidebar.left") }.help("Show or hide sidebar · ⌘S").accessibilityLabel("Toggle sidebar")
+            Spacer(minLength: 8)
+            Button { DerivativeBack() } label: { Image(systemName: "arrow.left") }.disabled(!model.canBack).accessibilityLabel("Go back")
+            Button { DerivativeForward() } label: { Image(systemName: "arrow.right") }.disabled(!model.canForward).accessibilityLabel("Go forward")
+            Button { model.store.active?.loading == true ? DerivativeStop() : DerivativeReload() } label: { Image(systemName: model.store.active?.loading == true ? "xmark" : "arrow.clockwise") }.accessibilityLabel(model.store.active?.loading == true ? "Stop loading" : "Reload page")
+        }.font(.system(size: 15, weight: .medium)).frame(height: 28)
+            .background { if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil { SidebarLayoutProbe() } }
+    }
+    private var favorites: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3), spacing: 7) {
+            ForEach(model.store.state.favorites) { favorite in
+                Button { model.openFavorite(favorite.id) } label: {
+                    SiteIcon(url: favorite.url, title: favorite.name, size: 22)
+                        .frame(maxWidth: .infinity).frame(height: 43)
+                        .background(model.wash, in: RoundedRectangle(cornerRadius: 11))
+                        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(model.store.active?.favoriteId == favorite.id ? model.accent.opacity(0.8) : .clear, lineWidth: 1.5))
+                        .scaleEffect(model.dragging == "favorite:"+favorite.id ? 0.94 : 1)
+                }.help(favorite.name).accessibilityLabel("Open favorite \(favorite.name)")
+                    .onDrag { model.provider("favorite:"+favorite.id) }
+                    .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "favorite", id: favorite.id))
+                    .contextMenu {
+                        Button("Open") { model.openFavorite(favorite.id) }
+                        Button("Edit favorite") { model.send("favorite.edit", id: favorite.id) }
+                        Button("Copy address") { model.send("copy", id: favorite.url) }
+                        Divider(); Button("Remove favorite") { model.store.deleteFavorite(favorite.id) }
+                    }
+            }
+        }
+    }
+    private var splitGroup: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(model.splitIDs.enumerated()), id: \.element) { index, id in
+                if let tab = model.store.state.tabs.first(where: { $0.id == id }) {
+                    Button { model.selectTab(id) } label: { HStack(spacing: 5) { Text("\(index+1)").font(.system(size: 9)); SiteIcon(url: tab.url, title: tab.title); Text(tab.title).font(.system(size: 11)).lineLimit(1) }.padding(8).frame(maxWidth: .infinity).background(model.wash.opacity(model.store.state.activeTabId == id ? 1 : 0), in: RoundedRectangle(cornerRadius: 8)) }
+                }
+            }
+        }.background(model.wash, in: RoundedRectangle(cornerRadius: 10)).contextMenu { Button("Separate tabs") { model.send("split.close") }; ForEach(Array(model.splitIDs.enumerated()), id: \.element) { i, id in Button("Close pane \(i+1)") { model.closeTab(id) } } }
+    }
+    private func groupLabel(_ title: String, pinned: Bool) -> some View {
+        Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
+            .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: pinned ? "pinned" : "today", id: model.store.state.activeSpaceId))
+    }
+    private var footer: some View {
+        HStack(spacing: 4) {
+            Menu {
+                Section("Sidebar width") { ForEach(["compact", "comfortable", "wide"], id: \.self) { size in Button(size.capitalized) { model.send("preferences", ["sidebarSize": size]) } } }
+                Section("Sidebar") { ForEach(["fixed", "hover", "hidden"], id: \.self) { mode in Button(mode == "hover" ? "Floating on hover" : mode.capitalized) { model.send("preferences", ["sidebarMode": mode]) } } }
+            } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 22).accessibilityLabel("Sidebar options")
+            GeometryReader { geometry in
+                ScrollView(.horizontal) { HStack(spacing: 4) {
+            ForEach(model.store.state.spaces) { space in
+                Button { model.selectSpace(space.id) } label: { SpaceGlyph(icon: space.icon).font(.system(size: 12)).frame(width: 25, height: 25).background(model.wash.opacity(model.store.state.activeSpaceId == space.id ? 1 : 0), in: RoundedRectangle(cornerRadius: 8)) }
+                    .help(space.name).accessibilityLabel("Switch to \(space.name) Space")
+                    .onDrag { model.provider("space:"+space.id) }
+                    .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "space", id: space.id))
+                    .contextMenu { Button("Rename Space") { model.send("space.rename", id: space.id) }; Button("Delete empty Space") { model.send("space.delete", id: space.id) }.disabled(model.store.state.spaces.count == 1 || model.store.state.tabs.contains { $0.spaceId == space.id }) }
+            }
+                }.frame(minWidth: geometry.size.width) }.scrollIndicators(.hidden)
+            }.frame(height: 27)
+            Button { model.send("settings") } label: { Image(systemName: "slider.horizontal.3").font(.system(size: 13)).frame(width: 22) }.accessibilityLabel("Settings")
+        }.frame(height: 28)
+    }
+}
+struct NativeTabRow: View {
+    @ObservedObject var model: BrowserModel
+    let tab: BrowserTab
+    var body: some View {
         HStack(spacing: 5) {
             Button { model.selectTab(tab.id) } label: {
                 HStack(spacing: 9) {
@@ -147,22 +226,88 @@ struct SidebarView: View {
             }.accessibilityLabel("Select tab \(tab.title)")
             Button { model.closeTab(tab.id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).frame(width: 25, height: 28).foregroundStyle(.secondary) }.accessibilityLabel("Close tab \(tab.title)")
         }
-        .font(.system(size: 12)).background(.white.opacity(tab.id == model.store.state.activeTabId ? 0.11 : 0), in: RoundedRectangle(cornerRadius: 10))
+        .font(.system(size: 12)).background(model.wash.opacity(tab.id == model.store.state.activeTabId ? 1 : 0), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            if model.dropTarget == "split:"+tab.id { HStack { Image(systemName: "rectangle.split.2x1"); Text("Drop to split").font(.system(size: 11)) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(model.accent.opacity(0.75), in: RoundedRectangle(cornerRadius: 10)).allowsHitTesting(false) }
+            if model.dropTarget == "before:"+tab.id { VStack { Capsule().fill(model.accent).frame(height: 2); Spacer() }.allowsHitTesting(false) }
+            if model.dropTarget == "after:"+tab.id { VStack { Spacer(); Capsule().fill(model.accent).frame(height: 2) }.allowsHitTesting(false) }
+        }
+        .onDrag { model.provider("tab:"+tab.id) }
+        .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "tab", id: tab.id))
         .contextMenu {
             Button(tab.pinned ? "Unpin tab" : "Pin tab") { model.pin(tab.id) }
             Button("Duplicate tab") { model.duplicate(tab.id) }
+            Button("Copy address") { model.send("copy", id: tab.url) }
+            Menu("Move to Space") { ForEach(model.store.state.spaces.filter { $0.id != tab.spaceId }) { space in Button(space.name) { model.send("tab.place", id: tab.id, ["spaceId": space.id, "pinned": "true"]) } } }
+            Menu("Move to folder") { ForEach(model.store.state.folders.filter { $0.spaceId == tab.spaceId }) { folder in Button(folder.name) { model.send("tab.place", id: tab.id, ["folderId": folder.id, "pinned": "true"]) } } }
+            if let active = model.store.active, active.id != tab.id { Button("Split with current tab") { model.send("split.open", id: tab.id) } }
             Button("Close tab") { model.closeTab(tab.id) }
         }
     }
 }
-
-// A passive frame marker for the isolated native layout fixture.
-private struct SidebarLayoutProbe: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.identifier = NSUserInterfaceItemIdentifier("sidebar-header-layout")
-        return view
+struct FolderRow: View {
+    @ObservedObject var model: BrowserModel
+    let folder: BrowserFolder
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Button { model.store.toggleFolder(folder.id) } label: { HStack(spacing: 8) { Image(systemName: folder.collapsed ? "chevron.right" : "chevron.down").font(.system(size: 9)); Image(systemName: folder.collapsed ? "folder" : "folder.fill"); Text(folder.name); Spacer() }.font(.system(size: 12)).padding(9) }
+                .background(model.wash.opacity(0.5), in: RoundedRectangle(cornerRadius: 9))
+                .onDrag { model.provider("folder:"+folder.id) }
+                .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id))
+                .contextMenu { Button("Rename folder") { model.send("folder.rename", id: folder.id) }; Button("Remove folder · keep tabs") { model.store.deleteFolder(folder.id) } }
+            if !folder.collapsed {
+                ForEach(model.store.currentTabs.filter { $0.folderId == folder.id && !model.splitIDs.contains($0.id) }) { NativeTabRow(model: model, tab: $0).padding(.leading, 10) }
+                if !model.store.currentTabs.contains(where: { $0.folderId == folder.id }) { Text("Drag tabs here").font(.system(size: 10)).foregroundStyle(.secondary).padding(10).frame(maxWidth: .infinity).onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id)) }
+            }
+        }
     }
+}
+struct SidebarDrop: DropDelegate {
+    let model: BrowserModel
+    let kind: String, id: String
+    func validateDrop(info: DropInfo) -> Bool { model.dragging != nil }
+    func dropEntered(info: DropInfo) {
+        if kind == "favorite", let token = model.dragging, token.hasPrefix("favorite:") {
+            let source = String(token.dropFirst(9))
+            let favorites = model.store.state.favorites
+            if let from = favorites.firstIndex(where: { $0.id == source }), let to = favorites.firstIndex(where: { $0.id == id }), from != to {
+                let before = from < to ? (favorites.indices.contains(to+1) ? favorites[to+1].id : nil) : id
+                withAnimation(.easeOut(duration: 0.16)) { model.store.reorderFavorite(source, before: before) }
+            }
+        }
+        update(info)
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { update(info); return DropProposal(operation: .move) }
+    func dropExited(info: DropInfo) { model.dropTarget = nil }
+    private func update(_ info: DropInfo) {
+        if kind == "tab", let token = model.dragging, token.hasPrefix("tab:"), token != "tab:"+id { model.dropTarget = (info.location.y >= 8 && info.location.y <= 26 ? "split:" : info.location.y > 26 ? "after:" : "before:")+id }
+    }
+    func performDrop(info: DropInfo) -> Bool {
+        defer { model.dragging = nil; model.dropTarget = nil }
+        guard let token = model.dragging else { return false }
+        let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return false }
+        let source = parts[1]
+        if parts[0] == "favorite" && kind == "favorite" { return true }
+        if parts[0] == "space" && kind == "space" { model.store.reorderSpace(source, before: id); return true }
+        if parts[0] == "folder" && kind == "folder" { model.store.reorderFolder(source, before: id); return true }
+        guard parts[0] == "tab", source != id else { return false }
+        if kind == "tab", let target = model.store.state.tabs.first(where: { $0.id == id }) {
+            if info.location.y >= 8 && info.location.y <= 26 { model.send("split.open", id: source, ["withId": id]) }
+            else {
+                let siblings = model.store.state.tabs.filter { $0.id != source && $0.spaceId == target.spaceId && $0.pinned == target.pinned && $0.folderId == target.folderId }
+                let next = siblings.firstIndex { $0.id == id }.flatMap { index in siblings.indices.contains(index+1) ? siblings[index+1].id : nil }
+                var values = ["spaceId": target.spaceId, "pinned": String(target.pinned), "folderId": target.folderId ?? ""]
+                if info.location.y <= 8 { values["beforeId"] = id } else if let next { values["beforeId"] = next }
+                model.send("tab.place", id: source, values)
+            }
+        } else if kind == "folder" { model.send("tab.place", id: source, ["folderId": id, "pinned": "true"]) }
+        else { model.send("tab.place", id: source, ["spaceId": kind == "space" ? id : model.store.state.activeSpaceId, "pinned": String(kind != "today")]) }
+        return true
+    }
+}
+private struct SidebarLayoutProbe: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { let view = NSView(); view.identifier = NSUserInterfaceItemIdentifier("sidebar-header-layout"); return view }
     func updateNSView(_ view: NSView, context: Context) {}
 }
 
@@ -171,64 +316,70 @@ private struct SidebarLayoutProbe: NSViewRepresentable {
     @Published var selected = 0
     init(query: String) { self.query = query }
 }
+struct SearchSuggestion: Identifiable {
+    var id: String, title: String, detail: String, url: String, kind: String
+}
+@MainActor func nativeSuggestions(_ query: String, store: BrowserStore) -> [SearchSuggestion] {
+    let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    func matches(_ title: String, _ url: String) -> Bool { q.isEmpty || (title+" "+url).localizedCaseInsensitiveContains(q) }
+    var results = store.currentTabs.filter { matches($0.title, $0.url) }.sorted { $0.lastActive > $1.lastActive }.prefix(5).map { SearchSuggestion(id: $0.id, title: $0.title, detail: ($0.id == store.state.activeTabId ? "Current tab" : "Switch to tab")+" · "+$0.url, url: $0.url, kind: "tab") }
+    let urls = Set(results.map(\.url))
+    results += store.state.history.filter { !urls.contains($0.url) && matches($0.title, $0.url) }.prefix(4).map { SearchSuggestion(id: "history:"+$0.url, title: $0.title, detail: "History · "+$0.url, url: $0.url, kind: "history") }
+    if !q.isEmpty, let url = SavedBrowserState.resolve(q, engine: store.state.preferences.searchEngine) {
+        let web = !q.contains(where: \.isWhitespace) && (q.contains(".") || q.hasPrefix("http") || q.hasPrefix("localhost"))
+        if web && !results.contains(where: { $0.url == url.absoluteString }) { results.insert(SearchSuggestion(id: "url", title: url.host ?? q, detail: "Open website · "+url.absoluteString, url: url.absoluteString, kind: "url"), at: 0) }
+        for (id, title) in [("sidebar.toggle", "Toggle sidebar"), ("settings", "Open settings")] where title.localizedCaseInsensitiveContains(q) { results.append(SearchSuggestion(id: id, title: title, detail: "Command", url: "", kind: "command")) }
+        var search = URLComponents(string: store.state.preferences.searchEngine == "duckduckgo" ? "https://duckduckgo.com/" : "https://www.google.com/search")!
+        search.queryItems = [URLQueryItem(name: "q", value: q)]
+        results.append(SearchSuggestion(id: "search", title: "Search for “\(q)”", detail: store.state.preferences.searchEngine == "google" ? "Google Search" : "DuckDuckGo", url: search.url!.absoluteString, kind: "search"))
+    }
+    return Array(results.prefix(8))
+}
 struct SearchView: View {
     @ObservedObject var model: SearchModel
     @ObservedObject var browser: BrowserModel
     let submit: (String) -> Void
     let dismiss: () -> Void
     let choose: (String) -> Void
-    private var results: [BrowserTab] {
-        let query = model.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Array(browser.store.currentTabs.filter { query.isEmpty || "\($0.title) \($0.url)".localizedCaseInsensitiveContains(query) }.sorted { $0.lastActive > $1.lastActive }.prefix(5))
+    private var results: [SearchSuggestion] { nativeSuggestions(model.query, store: browser.store) }
+    private func execute(_ result: SearchSuggestion) {
+        if result.kind == "tab" { choose(result.id) }
+        else if result.kind == "command" { dismiss(); browser.send(result.id) }
+        else { submit(result.url) }
     }
     private func confirm() {
-        if !results.isEmpty { choose(results[max(0, min(model.selected, results.count-1))].id) }
+        if !results.isEmpty { execute(results[max(0, min(model.selected, results.count-1))]) }
         else { submit(model.query) }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Color.white.opacity(0.6))
-                TextField("Search or enter URL", text: $model.query, prompt: Text("Search or enter URL").foregroundStyle(Color.white.opacity(0.55))).textFieldStyle(.plain)
-                    .font(.system(size: 20)).foregroundStyle(Color.white).onSubmit(confirm).accessibilityLabel("Search or enter URL")
-                Button("esc", action: dismiss).buttonStyle(.plain).font(.system(size: 10)).padding(5).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 5))
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search or enter URL", text: $model.query).textFieldStyle(.plain).font(.system(size: 20)).onSubmit(confirm).accessibilityLabel("Search or enter URL")
+                Button("esc", action: dismiss).buttonStyle(.plain).font(.system(size: 10)).padding(5).background(browser.wash, in: RoundedRectangle(cornerRadius: 5))
             }.padding(20)
-            if !results.isEmpty { ScrollView { VStack(spacing: 0) { ForEach(Array(results.enumerated()), id: \.element.id) { index, tab in
+            if !results.isEmpty { ScrollViewReader { proxy in ScrollView { VStack(spacing: 0) { ForEach(Array(results.enumerated()), id: \.element.id) { index, result in
                 HStack(spacing: 8) {
-                    Button { choose(tab.id) } label: {
+                    Button { execute(result) } label: {
                         HStack(spacing: 12) {
-                            SiteIcon(url: tab.url, title: tab.title, size: 20)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(tab.title).font(.system(size: 13, weight: .medium))
-                                Text("\(tab.id == browser.store.state.activeTabId ? "Current tab" : "Switch to tab") · \(tab.url)").font(.system(size: 11)).foregroundStyle(Color.white.opacity(0.6))
-                            }.lineLimit(1)
+                            if result.kind == "search" || result.kind == "command" { Image(systemName: result.kind == "search" ? "magnifyingglass" : "command").frame(width: 20) }
+                            else { SiteIcon(url: result.url, title: result.title, size: 20) }
+                            VStack(alignment: .leading, spacing: 3) { Text(result.title).font(.system(size: 13, weight: .medium)); Text(result.detail).font(.system(size: 11)).foregroundStyle(.secondary) }.lineLimit(1)
                             Spacer()
-                        }.padding(12)
+                        }.padding(12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }
-                    Button { browser.closeTab(tab.id) } label: { Image(systemName: "xmark").font(.system(size: 11)).padding(10) }.accessibilityLabel("Close result \(tab.title)")
-                }.buttonStyle(.plain).background(.white.opacity(index == min(max(0, model.selected), results.count-1) ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 10)).padding(.horizontal, 8)
-            }
-            } }.frame(maxHeight: CGFloat(results.count)*60).scrollIndicators(.hidden) }
-            HStack { Text(model.query.isEmpty ? "Type an address or a search" : "Press Return to open"); Spacer(); Text("↵ Open") }
-                .font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.6)).padding(.horizontal, 20).padding(.vertical, 12)
+                    if result.kind == "tab" { Button { browser.closeTab(result.id) } label: { Image(systemName: "xmark").font(.system(size: 11)).padding(10) }.accessibilityLabel("Close result \(result.title)") }
+                }.buttonStyle(.plain).background(browser.wash.opacity(index == min(max(0, model.selected), results.count-1) ? 1 : 0), in: RoundedRectangle(cornerRadius: 10)).padding(.horizontal, 8).id(index).onHover { if $0 { model.selected = index } }
+            } } }.frame(maxHeight: CGFloat(min(5, results.count))*60).scrollIndicators(.hidden).onChange(of: model.selected) { _, index in proxy.scrollTo(index, anchor: .center) } } }
+            HStack { Text(model.query.isEmpty ? "Type an address or a search" : "↑ ↓ Select"); Spacer(); Text("↵ Open") }.font(.system(size: 10)).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.vertical, 12)
         }
-        .foregroundStyle(Color.white.opacity(0.92))
-        .background(Color(red: 0.19, green: 0.17, blue: 0.25).opacity(0.96), in: RoundedRectangle(cornerRadius: 18))
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
-        .padding(1).preferredColorScheme(.dark)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).ignoresSafeArea()
-        .onExitCommand(perform: dismiss)
-        .onMoveCommand { direction in
-            guard !results.isEmpty else { return }
-            if direction == .down { model.selected = min(results.count-1, model.selected+1) }
-            if direction == .up { model.selected = max(0, model.selected-1) }
-        }
+        .foregroundStyle(browser.ink).background(browser.surface.opacity(0.96), in: RoundedRectangle(cornerRadius: 18)).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.14), lineWidth: 1)).shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+        .padding(1).preferredColorScheme(browser.dark ? .dark : .light).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).ignoresSafeArea()
+        .onExitCommand(perform: dismiss).onMoveCommand { direction in if !results.isEmpty { if direction == .down { model.selected = (model.selected+1)%results.count }; if direction == .up { model.selected = (model.selected-1+results.count)%results.count } } }
         .onChange(of: model.query) { _, _ in model.selected = 0 }
     }
 }
-
 struct NativeBrand: View {
     var body: some View {
         GeometryReader { geometry in
@@ -255,9 +406,9 @@ struct HomeView: View {
         GeometryReader { geometry in
             VStack(spacing: 20) {
                 NativeBrand().foregroundStyle(model.accent)
-                Text("New tab").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.white.opacity(0.65))
+                Text("New tab").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                 SearchView(model: search, browser: model, submit: submit, dismiss: { search.query = "" }, choose: choose).frame(width: min(720, max(200, geometry.size.width-48)))
             }.frame(maxWidth: .infinity).padding(.top, max(24, geometry.size.height*0.38-110))
-        }.background(Color(red: 0.15, green: 0.13, blue: 0.19)).preferredColorScheme(.dark).ignoresSafeArea()
+        }.background(model.surface).foregroundStyle(model.ink).preferredColorScheme(model.dark ? .dark : .light).ignoresSafeArea()
     }
 }

@@ -4,6 +4,7 @@
 #import <AppKit/AppKit.h>
 #include <map>
 #include <vector>
+#include <set>
 #include <limits.h>
 #include <stdlib.h>
 #include "Bridge.h"
@@ -12,6 +13,8 @@
 #include "include/cef_client.h"
 #include "include/cef_command_line.h"
 #include "include/cef_parser.h"
+#include "include/cef_download_item.h"
+#include "include/cef_cookie.h"
 #include "include/cef_task.h"
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
@@ -26,8 +29,26 @@ struct Page {
 std::map<std::string, Page> pages;
 std::map<std::string, CefRefPtr<CefRequestContext>> contexts;
 __strong NSView* host;
-std::string selected;
+std::string selected, splitFirst, splitSecond;
+double splitRatio = 0.5;
+std::map<std::string, CefRefPtr<CefDownloadItemCallback>> downloads;
+std::set<std::string> readyDownloads, cancelDownloads;
+class CancelDownloadTask final : public CefTask {
+ public:
+  explicit CancelDownloadTask(CefRefPtr<CefDownloadItemCallback> callback) : callback_(callback) {}
+  void Execute() override { callback_->Cancel(); }
+ private:
+  CefRefPtr<CefDownloadItemCallback> callback_;
+  IMPLEMENT_REFCOUNTING(CancelDownloadTask);
+};
+bool Visible(const std::string& id) { return id == selected || id == splitFirst || id == splitSecond; }
 bool quitting = false, exiting = false;
+class Completion final : public CefCompletionCallback {
+ public:
+  void OnComplete() override {}
+ private:
+  IMPLEMENT_REFCOUNTING(Completion);
+};
 class QuitTask final : public CefTask {
  public:
   void Execute() override { CefQuitMessageLoop(); }
@@ -44,6 +65,24 @@ bool IsWebsite(const CefString& value) {
   const std::string scheme = CefString(&parts.scheme);
   return scheme == "http" || scheme == "https";
 }
+CefRefPtr<CefRequestContext> Context(const std::string& profile) {
+  if (profile.empty() || profile.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-") != std::string::npos) return nullptr;
+  if (contexts.count(profile)) return contexts.at(profile);
+  CefRequestContextSettings settings;
+  NSString* root = NSProcessInfo.processInfo.environment[@"DERIVATIVE_NATIVE_USER_DATA"];
+  if (!root) root = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/Derivative Native Prototype"];
+  char canonical[PATH_MAX]; if (realpath(root.fileSystemRepresentation, canonical)) root = [NSString stringWithUTF8String:canonical];
+  NSString* path = [root stringByAppendingPathComponent:[@"Space-" stringByAppendingString:[NSString stringWithUTF8String:profile.c_str()]]];
+  CefString(&settings.cache_path) = path.UTF8String; settings.persist_session_cookies = true;
+  return contexts[profile] = CefRequestContext::CreateContext(settings, nullptr);
+}
+void External(const CefString& value) {
+  NSString* text = [NSString stringWithUTF8String:value.ToString().c_str()]; NSURL* url = [NSURL URLWithString:text];
+  if (![@[@"mailto", @"tel"] containsObject:url.scheme.lowercaseString] || host.window.attachedSheet) return;
+  NSAlert* alert = [[NSAlert alloc] init]; alert.messageText = [url.scheme isEqualToString:@"mailto"] ? @"Open Mail?" : @"Open your calling app?";
+  alert.informativeText = [text substringToIndex:MIN(text.length, 300)]; [alert addButtonWithTitle:@"Cancel"]; [alert addButtonWithTitle:@"Open"];
+  [alert beginSheetModalForWindow:host.window completionHandler:^(NSModalResponse response) { if (response == NSAlertSecondButtonReturn) [[NSWorkspace sharedWorkspace] openURL:url]; }];
+}
 void Publish(const std::string& id) {
   CEF_REQUIRE_UI_THREAD();
   auto found = pages.find(id); if (found == pages.end()) return;
@@ -55,14 +94,14 @@ void FinishIfClosed() {
   if (quitting && pages.empty() && !exiting) {
     exiting = true;
     DerivativeFinishQuit();
-    contexts.clear();
+    downloads.clear(); contexts.clear();
     if (getenv("DERIVATIVE_NATIVE_TRACE")) fprintf(stderr, "Native window closed; requesting loop exit\n");
     CefPostTask(TID_UI, new QuitTask());
   }
 }
 class BrowserClient final : public CefClient, public CefLifeSpanHandler,
     public CefDisplayHandler, public CefLoadHandler, public CefKeyboardHandler,
-    public CefRequestHandler, public CefDownloadHandler, public CefJSDialogHandler {
+    public CefRequestHandler, public CefDownloadHandler, public CefJSDialogHandler, public CefFocusHandler, public CefPermissionHandler {
  public:
   explicit BrowserClient(std::string id) : id_(std::move(id)) {}
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -72,24 +111,45 @@ class BrowserClient final : public CefClient, public CefLifeSpanHandler,
   CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
   CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return this; }
   CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override { return this; }
+  CefRefPtr<CefFocusHandler> GetFocusHandler() override { return this; }
+  CefRefPtr<CefPermissionHandler> GetPermissionHandler() override { return this; }
+  bool OnRequestMediaAccessPermission(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, const CefString& origin, uint32_t permissions, CefRefPtr<CefMediaAccessCallback> callback) override {
+    const uint32_t supported = CEF_MEDIA_PERMISSION_DEVICE_AUDIO_CAPTURE | CEF_MEDIA_PERMISSION_DEVICE_VIDEO_CAPTURE;
+    if (!IsWebsite(origin) || (permissions & ~supported) || host.window.attachedSheet) { callback->Cancel(); return true; }
+    NSAlert* alert = [[NSAlert alloc] init]; alert.messageText = @"Website permission";
+    alert.informativeText = [NSString stringWithFormat:@"%s wants to use your %@.", origin.ToString().c_str(), (permissions & CEF_MEDIA_PERMISSION_DEVICE_VIDEO_CAPTURE) ? ((permissions & CEF_MEDIA_PERMISSION_DEVICE_AUDIO_CAPTURE) ? @"camera and microphone" : @"camera") : @"microphone"];
+    [alert addButtonWithTitle:@"Don't Allow"]; [alert addButtonWithTitle:@"Allow Once"];
+    [alert beginSheetModalForWindow:host.window completionHandler:^(NSModalResponse response) { callback->Continue(response == NSAlertSecondButtonReturn ? permissions : 0); }];
+    return true;
+  }
+  bool OnShowPermissionPrompt(CefRefPtr<CefBrowser>, uint64_t, const CefString& origin, uint32_t permissions, CefRefPtr<CefPermissionPromptCallback> callback) override {
+    const uint32_t supported = CEF_PERMISSION_TYPE_GEOLOCATION | CEF_PERMISSION_TYPE_NOTIFICATIONS | CEF_PERMISSION_TYPE_CLIPBOARD;
+    if (!IsWebsite(origin) || (permissions & ~supported) || host.window.attachedSheet) { callback->Continue(CEF_PERMISSION_RESULT_DENY); return true; }
+    NSString* capability = (permissions & CEF_PERMISSION_TYPE_GEOLOCATION) ? @"your location" : (permissions & CEF_PERMISSION_TYPE_NOTIFICATIONS) ? @"notifications" : @"the clipboard";
+    NSAlert* alert = [[NSAlert alloc] init]; alert.messageText = @"Website permission"; alert.informativeText = [NSString stringWithFormat:@"%s wants access to %@.", origin.ToString().c_str(), capability];
+    [alert addButtonWithTitle:@"Don't Allow"]; [alert addButtonWithTitle:@"Allow Once"];
+    [alert beginSheetModalForWindow:host.window completionHandler:^(NSModalResponse response) { callback->Continue(response == NSAlertSecondButtonReturn ? CEF_PERMISSION_RESULT_ACCEPT : CEF_PERMISSION_RESULT_DENY); }];
+    return true;
+  }
+  void OnGotFocus(CefRefPtr<CefBrowser>) override { if (selected != id_ && Visible(id_)) DerivativePageFocused(id_.c_str()); }
   void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
     auto& page = pages.at(id_); page.browser = browser;
     page.view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(browser->GetHost()->GetWindowHandle());
     page.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    page.view.hidden = selected != id_;
-    if (selected != id_) [page.view removeFromSuperview];
-    else browser->GetHost()->SetFocus(true);
+    DerivativeLayoutPages();
+    if (selected == id_) browser->GetHost()->SetFocus(true);
     Publish(id_);
     if (quitting || page.closing) browser->GetHost()->CloseBrowser(false);
   }
-  bool DoClose(CefRefPtr<CefBrowser>) override {
+  bool DoClose(CefRefPtr<CefBrowser> browser) override {
     if (getenv("DERIVATIVE_NATIVE_TRACE")) fprintf(stderr, "Closing native tab %s\n", id_.c_str());
     // Each tab is an embedded view. Closing one must not close the parent window.
     const auto id = id_;
+    const int closingBrowser = browser->GetIdentifier();
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
         auto found = pages.find(id);
-        if (found != pages.end()) {
+        if (found != pages.end() && found->second.browser && found->second.browser->GetIdentifier() == closingBrowser) {
           NSView* view = found->second.view;
           [view.window makeFirstResponder:nil];
           [view removeFromSuperview];
@@ -121,6 +181,7 @@ class BrowserClient final : public CefClient, public CefLifeSpanHandler,
       if (!allow) {
         auto found = pages.find(id);
         if (found != pages.end()) { found->second.closing = false; found->second.preserve = false; }
+        DerivativeCancelTabClose(id.c_str());
         if (quitting) { quitting = false; DerivativeCancelQuit(); }
       }
       callback->Continue(allow, CefString());
@@ -131,9 +192,10 @@ class BrowserClient final : public CefClient, public CefLifeSpanHandler,
       const CefString& url, const CefString&, WindowOpenDisposition, bool,
       const CefPopupFeatures&, CefWindowInfo&, CefRefPtr<CefClient>&,
       CefBrowserSettings&, CefRefPtr<CefDictionaryValue>&, bool*) override {
-    if (IsWebsite(url)) DerivativeOpenPopup(id_.c_str(), url.ToString().c_str());
+    if (IsWebsite(url)) DerivativeOpenPopup(id_.c_str(), url.ToString().c_str()); else External(url);
     return true;
   }
+  void OnFullscreenModeChange(CefRefPtr<CefBrowser>, bool fullscreen) override { DerivativeWebsiteFullscreen(fullscreen); }
   void OnTitleChange(CefRefPtr<CefBrowser>, const CefString& title) override {
     pages.at(id_).title = title.ToString(); Publish(id_);
   }
@@ -150,23 +212,60 @@ class BrowserClient final : public CefClient, public CefLifeSpanHandler,
   }
   void OnLoadError(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, ErrorCode code,
       const CefString& text, const CefString&) override {
-    if (frame->IsMain() && code != ERR_ABORTED && selected == id_) DerivativeShowError(text.ToString().c_str());
+    if (frame->IsMain() && code != ERR_ABORTED) DerivativeTabError(id_.c_str(), text.ToString().c_str());
   }
   bool OnBeforeBrowse(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
       CefRefPtr<CefRequest> request, bool, bool) override {
-    return frame->IsMain() && request->GetURL() != "about:blank" && !IsWebsite(request->GetURL());
+    const bool blocked = frame->IsMain() && request->GetURL() != "about:blank" && !IsWebsite(request->GetURL());
+    if (blocked) External(request->GetURL());
+    return blocked;
+  }
+  void OnRenderProcessTerminated(CefRefPtr<CefBrowser>, TerminationStatus, int, const CefString&) override {
+    DerivativeTabError(id_.c_str(), "This page stopped responding. Reload to give it a fresh start.");
   }
   bool CanDownload(CefRefPtr<CefBrowser>, const CefString&, const CefString&) override {
-    DerivativeShowError("Downloads have not been migrated yet."); return false;
+    return true;
+  }
+  bool OnBeforeDownload(CefRefPtr<CefBrowser>, CefRefPtr<CefDownloadItem>, const CefString& name, CefRefPtr<CefBeforeDownloadCallback> callback) override {
+    NSString* directory = NSProcessInfo.processInfo.environment[@"DERIVATIVE_NATIVE_TEST_DIRECTORY"];
+    if (directory) {
+      directory = [directory stringByAppendingPathComponent:@"downloads"];
+      [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+      NSString* filename = [[NSString stringWithUTF8String:name.ToString().c_str()] lastPathComponent];
+      callback->Continue([directory stringByAppendingPathComponent:filename].UTF8String, false);
+    } else callback->Continue(CefString(), true);
+    return true;
+  }
+  void OnDownloadUpdated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDownloadItem> item, CefRefPtr<CefDownloadItemCallback> callback) override {
+    const std::string id = std::to_string(browser->GetIdentifier())+"-"+std::to_string(item->GetId());
+    const bool hasPath = !item->GetFullPath().empty();
+    if (item->IsInProgress()) {
+      downloads[id] = callback;
+      if (hasPath) readyDownloads.insert(id);
+      if (hasPath && cancelDownloads.erase(id)) CefPostTask(TID_UI, new CancelDownloadTask(callback));
+    } else { downloads.erase(id); readyDownloads.erase(id); cancelDownloads.erase(id); }
+    const char* status = item->IsComplete() ? "completed" : item->IsCanceled() ? "cancelled" : item->IsInProgress() ? (hasPath ? "progressing" : "choosing") : "interrupted";
+    DerivativeDownloadUpdate(id.c_str(), item->GetSuggestedFileName().ToString().c_str(), item->GetFullPath().ToString().c_str(), status, item->GetReceivedBytes(), item->GetTotalBytes());
   }
   bool OnPreKeyEvent(CefRefPtr<CefBrowser>, const CefKeyEvent& event, CefEventHandle, bool*) override {
+    const auto flags = event.modifiers;
+    const int code = event.windows_key_code;
+    if (event.type == KEYEVENT_KEYUP && code == 17) { DerivativeShortcut(1110); return false; }
+    if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_CONTROL_DOWN) && !(flags & (EVENTFLAG_COMMAND_DOWN | EVENTFLAG_ALT_DOWN)) && code == 9) { DerivativeShortcut(flags & EVENTFLAG_SHIFT_DOWN ? 1101 : 1100); return true; }
+    if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_COMMAND_DOWN) && !(flags & EVENTFLAG_CONTROL_DOWN)) {
+      if ((flags & EVENTFLAG_ALT_DOWN) && !(flags & EVENTFLAG_SHIFT_DOWN) && code >= 37 && code <= 40) { DerivativeShortcut(1200+code-37); return true; }
+      if ((flags & EVENTFLAG_SHIFT_DOWN) && !(flags & EVENTFLAG_ALT_DOWN)) {
+        int action = code == 'T' ? 1102 : code == 'C' ? 1103 : code == 'R' ? 1104 : code == 219 ? 1105 : code == 221 ? 1106 : 0;
+        if (action) { DerivativeShortcut(action); return true; }
+      }
+    }
     if (event.type == KEYEVENT_RAWKEYDOWN && (event.modifiers & EVENTFLAG_CONTROL_DOWN) && !(event.modifiers & (EVENTFLAG_COMMAND_DOWN | EVENTFLAG_ALT_DOWN | EVENTFLAG_SHIFT_DOWN)) && event.windows_key_code >= '1' && event.windows_key_code <= '9') {
       DerivativeShortcut(1001+event.windows_key_code-'1'); return true;
     }
     if (event.type != KEYEVENT_RAWKEYDOWN || !(event.modifiers & EVENTFLAG_COMMAND_DOWN) ||
         (event.modifiers & (EVENTFLAG_CONTROL_DOWN | EVENTFLAG_ALT_DOWN | EVENTFLAG_SHIFT_DOWN))) return false;
     const int key = event.windows_key_code;
-    if (key == 'T' || key == 'L' || key == 'S' || key == 'R' || key == 'W' || key == 'Q' || key == 'D' || (key >= '1' && key <= '9')) {
+    if (key == 'T' || key == 'L' || key == 'S' || key == 'R' || key == 'W' || key == 'Q' || key == 'D' || key == 188 || key == 219 || key == 221 || (key >= '1' && key <= '9')) {
       DerivativeShortcut(key); return true;
     }
     return false;
@@ -195,42 +294,40 @@ extern "C" void DerivativeCreatePage(const char* id, const char* space, const ch
   if (pages.count(id) || !IsWebsite(url) || quitting) return;
   const std::string profile(space);
   if (profile.empty() || profile.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-") != std::string::npos) return;
-  if (!contexts.count(profile)) {
-    CefRequestContextSettings settings;
-    const auto command = CefCommandLine::GetGlobalCommandLine();
-    NSString* root = NSProcessInfo.processInfo.environment[@"DERIVATIVE_NATIVE_USER_DATA"];
-    if (!root) root = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/Derivative Native Prototype"];
-    char canonical[PATH_MAX];
-    if (realpath(root.fileSystemRepresentation, canonical)) root = [NSString stringWithUTF8String:canonical];
-    NSString* path = [root stringByAppendingPathComponent:[@"Space-" stringByAppendingString:[NSString stringWithUTF8String:space]]];
-    CefString(&settings.cache_path) = path.UTF8String; settings.persist_session_cookies = true;
-    contexts[profile] = CefRequestContext::CreateContext(settings, nullptr);
-  }
+  if (!Context(profile)) return;
   auto& page = pages[id]; page.space = space; page.url = url; page.title = url; page.loading = true;
   CefWindowInfo info;
   info.SetAsChild(CAST_NSVIEW_TO_CEF_WINDOW_HANDLE(host), CefRect(0, 0, host.bounds.size.width, host.bounds.size.height));
   info.runtime_style = CEF_RUNTIME_STYLE_ALLOY;
   CefBrowserSettings settings;
   if (!CefBrowserHost::CreateBrowser(info, new BrowserClient(id), url, settings, nullptr, contexts.at(profile))) {
-    pages.erase(id); DerivativeShowError("Unable to create Chromium tab.");
+    pages.erase(id); DerivativeTabError(id, "Unable to open this page. Please try again.");
   }
 }
-extern "C" void DerivativeSelectPage(const char* id) {
-  CEF_REQUIRE_UI_THREAD(); selected = id;
+extern "C" void DerivativeLayoutPages() {
+  CEF_REQUIRE_UI_THREAD();
   for (auto& [key, page] : pages) {
-    const bool active = key == selected;
-    if (page.view) {
-      if (active) {
-        if (page.view.superview != host) [host addSubview:page.view];
-        page.view.frame = host.bounds;
-        page.view.hidden = NO;
-      } else {
-        page.view.hidden = YES;
-        [page.view removeFromSuperview];
-      }
+    if (!page.view) continue;
+    if (!Visible(key)) { page.view.hidden = YES; [page.view removeFromSuperview]; continue; }
+    if (page.view.superview != host) [host addSubview:page.view];
+    NSRect frame = host.bounds;
+    if (!splitFirst.empty() && !splitSecond.empty()) {
+      const CGFloat left = (frame.size.width-6)*splitRatio;
+      if (key == splitFirst) frame.size.width = left;
+      else { frame.origin.x = left+6; frame.size.width -= left+6; }
     }
-    if (page.browser) page.browser->GetHost()->SetFocus(key == selected);
+    page.view.frame = frame;
+    page.view.autoresizingMask = splitFirst.empty() ? NSViewWidthSizable|NSViewHeightSizable : NSViewNotSizable;
+    page.view.hidden = NO;
   }
+}
+extern "C" void DerivativeSetSplit(const char* first, const char* second, double ratio) {
+  splitFirst = first; splitSecond = second; splitRatio = std::max(0.2, std::min(0.8, ratio));
+  DerivativeLayoutPages();
+}
+extern "C" void DerivativeSelectPage(const char* id) {
+  CEF_REQUIRE_UI_THREAD(); selected = id; DerivativeLayoutPages();
+  for (auto& [key, page] : pages) if (page.browser) page.browser->GetHost()->SetFocus(key == selected);
 }
 extern "C" void DerivativeClosePage(const char* id) {
   auto found = pages.find(id);
@@ -253,6 +350,23 @@ extern "C" void DerivativeNavigate(const char* url) { if (auto page = Active(); 
 extern "C" void DerivativeBack() { if (auto page = Active(); page && page->CanGoBack()) page->GoBack(); }
 extern "C" void DerivativeForward() { if (auto page = Active(); page && page->CanGoForward()) page->GoForward(); }
 extern "C" void DerivativeReload() { if (auto page = Active()) page->Reload(); }
+extern "C" void DerivativeStop() { if (auto page = Active()) page->StopLoad(); }
+extern "C" void DerivativeHardReload() { if (auto page = Active()) page->ReloadIgnoreCache(); }
+extern "C" void DerivativeCancelDownload(const char* id) {
+  auto found = downloads.find(id);
+  if (found == downloads.end()) return;
+  if (readyDownloads.count(id)) CefPostTask(TID_UI, new CancelDownloadTask(found->second));
+  else cancelDownloads.insert(id);
+}
+extern "C" void DerivativeClearData(const char* target) {
+  NSString* root = NSProcessInfo.processInfo.environment[@"DERIVATIVE_NATIVE_USER_DATA"];
+  if (!root) root = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/Derivative Native Prototype"];
+  for (NSString* name in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:root error:nil]) if ([name hasPrefix:@"Space-"]) Context([[name substringFromIndex:6] UTF8String]);
+  for (auto& [id, context] : contexts) {
+    if (std::string(target) == "cache") context->ClearHttpCache(new Completion());
+    else if (std::string(target) == "cookies") context->GetCookieManager(nullptr)->DeleteCookies(CefString(), CefString(), nullptr);
+  }
+}
 extern "C" void DerivativeFocusPage() { if (auto page = Active()) page->GetHost()->SetFocus(true); }
 
 @interface DerivativeApplication : NSApplication <CefAppProtocol>
@@ -282,12 +396,12 @@ int main(int argc, char* argv[]) {
     CefString(&settings.root_cache_path) = profile.UTF8String;
     CefString(&settings.cache_path) = [profile stringByAppendingPathComponent:@"Default"].UTF8String;
     CefString(&settings.log_file) = [profile stringByAppendingPathComponent:@"chromium.log"].UTF8String;
-    CefString(&settings.user_agent_product) = "DerivativeNative/0.1";
+    CefString(&settings.user_agent_product) = "Derivative/0.1";
     settings.log_severity = LOGSEVERITY_WARNING;
     if (!CefInitialize(CefMainArgs(argc, argv), settings, new BrowserApp(), nullptr)) return CefGetExitCode();
     CefRunMessageLoop();
     if (getenv("DERIVATIVE_NATIVE_TRACE")) fprintf(stderr, "Native event loop returned\n");
-    contexts.clear(); host = nil;
+    downloads.clear(); contexts.clear(); host = nil;
     if (getenv("DERIVATIVE_NATIVE_TRACE")) fprintf(stderr, "Native contexts released\n");
     CefShutdown();
     if (getenv("DERIVATIVE_NATIVE_TRACE")) fprintf(stderr, "Native shutdown completed\n");

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 
 @MainActor final class FlippedView: NSView {
     override var isFlipped: Bool { true }
@@ -20,6 +21,7 @@ import SwiftUI
     var home: NSHostingView<HomeView>!
     var searchPanel: NSHostingView<SearchView>?
     var searchModel: SearchModel?
+    var searchObservation: AnyCancellable?
     var searchEditsCurrent = false
     var monitor: Any?
     var hideWork: DispatchWorkItem?
@@ -28,6 +30,18 @@ import SwiftUI
     var ready = false
     var finishingQuit = false
     var testDriver: NativeTestDriver?
+    var auxiliaryPanel: NSView?
+    var errorPanels: [String: NSView] = [:]
+    var overlayKind = ""
+    var closedTabs: [BrowserTab] = []
+    var pendingMoves: [String: [String: String]] = [:]
+    var swipe = SpaceSwipe()
+    var swipeReset: DispatchWorkItem?
+    var splitRatio = 0.5
+    let splitDivider = SplitDivider()
+    var pageEnteredFullscreen = false
+    var appearanceObservation: NSKeyValueObservation?
+
 
     override init() {
         let directory = URL(fileURLWithPath: ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_USER_DATA"] ?? NSHomeDirectory()+"/Library/Application Support/Derivative Native Prototype")
@@ -41,7 +55,7 @@ import SwiftUI
         sidebar.sizingOptions = []
         super.init()
         model.pinned = store.state.preferences.sidebarMode == "fixed"; normalPinned = model.pinned
-        window.title = "Derivative Native"; window.appearance = NSAppearance(named: .darkAqua)
+        window.title = "Derivative"; window.appearance = NSAppearance(named: .darkAqua)
         window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
         window.minSize = NSSize(width: 700, height: 480)
         window.isReleasedWhenClosed = false; window.acceptsMouseMovedEvents = true; window.isRestorable = false
@@ -51,6 +65,8 @@ import SwiftUI
         root.wantsLayer = true; pageHost.wantsLayer = true
         pageHost.layer?.masksToBounds = true
         root.addSubview(pageHost); root.addSubview(sidebar)
+        splitDivider.addGestureRecognizer(NSPanGestureRecognizer(target: self, action: #selector(resizeSplit(_:))))
+        pageHost.addSubview(splitDivider)
         home = NSHostingView(rootView: HomeView(model: model, search: homeSearch, submit: { [weak self] in self?.navigate($0, newTab: true) }, choose: { [weak self] in self?.selectTab($0) }))
         pageHost.addSubview(home); home.autoresizingMask = [.width, .height]
         scrim.wantsLayer = true; scrim.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.07).cgColor
@@ -65,15 +81,25 @@ import SwiftUI
             guard let self, let tab = self.store.state.tabs.first(where: { $0.id == id }) else { return }
             _ = self.store.open(tab.url, spaceId: tab.spaceId); self.showActive()
         }
+        model.action = { [weak self] name, values in self?.perform(name, values) }
+        applyPreferences()
+        appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in DispatchQueue.main.async { self?.applyPreferences() } }
         installMenu(); NSApp.delegate = self
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown]) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseUp, .scrollWheel, .keyDown, .flagsChanged]) { [weak self] event in
             var consumed = false
             MainActor.assumeIsolated {
                 guard let self, event.window === self.window else { return }
+                if event.type == .keyDown, self.handleKey(event) { consumed = true; return }
+                if event.type == .flagsChanged, !event.modifierFlags.contains(.control), !self.model.recentIDs.isEmpty { self.commitRecent(); return }
+                if event.type == .leftMouseUp { DispatchQueue.main.async { self.model.dragging = nil; self.model.dropTarget = nil } }
                 let point = self.root.convert(event.locationInWindow, from: nil)
+                if event.type == .scrollWheel, !self.sidebar.isHidden, self.sidebar.frame.contains(point), self.auxiliaryPanel == nil, self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
+                    consumed = self.handleSwipe(dx: -event.scrollingDeltaX, dy: -event.scrollingDeltaY, time: event.timestamp, began: event.phase.contains(.began)); if consumed { return }
+                }
+                if event.type == .leftMouseDown, let panel = self.auxiliaryPanel, !panel.frame.contains(point) { self.closeOverlay(); consumed = true; return }
                 if event.type == .leftMouseDown && self.searchPanel != nil && !self.searchPanel!.frame.contains(point) { self.closeSearch(); consumed = true; return }
-                if event.type == .mouseMoved && !self.model.pinned && self.searchPanel == nil {
-                    if point.x <= 8 && (self.model.expanded || self.store.state.preferences.sidebarMode != "hidden") { self.setRevealed(true) }
+                if event.type == .mouseMoved && !self.model.pinned && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
+                    if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
                     else if point.x > self.store.state.preferences.sidebarWidth+24 { self.scheduleHide() }
                     else { self.hideWork?.cancel(); self.hideWork = nil }
                 }
@@ -108,8 +134,24 @@ import SwiftUI
             root.addSubview(scrim, positioned: .above, relativeTo: sidebar)
             root.addSubview(panel, positioned: .above, relativeTo: scrim)
             let top = min(260, bounds.height*0.28)
-            panel.frame = NSRect(x: max(24, (bounds.width-720)/2), y: top, width: min(720, bounds.width-48), height: bounds.height-top-24)
+            let count = min(5, nativeSuggestions(searchModel?.query ?? "", store: store).count)
+            let height = min(bounds.height-top-24, CGFloat(count)*60+100)
+            panel.frame = NSRect(x: max(24, (bounds.width-720)/2), y: top, width: min(720, bounds.width-48), height: height)
         }
+        if let panel = auxiliaryPanel {
+            scrim.frame = bounds
+            root.addSubview(scrim, positioned: .above, relativeTo: sidebar)
+            root.addSubview(panel, positioned: .above, relativeTo: scrim)
+            let width = min(overlayKind == "recent" ? 460.0 : 660.0, bounds.width-48)
+            let height = min(overlayKind == "recent" ? Double(model.recentIDs.count)*54+60 : 620, bounds.height-80)
+            panel.frame = NSRect(x: (bounds.width-width)/2, y: max(40, (bounds.height-height)/2), width: width, height: height)
+        }
+        splitDivider.isHidden = model.splitIDs.count != 2
+        if !splitDivider.isHidden {
+            splitDivider.frame = NSRect(x: (pageHost.bounds.width-6)*splitRatio, y: 0, width: 6, height: pageHost.bounds.height)
+            pageHost.addSubview(splitDivider, positioned: .above, relativeTo: nil)
+        }
+        if ready { DerivativeLayoutPages(); layoutErrors() }
         alignWindowButtons()
     }
     func alignWindowButtons() {
@@ -132,24 +174,34 @@ import SwiftUI
     }
     func showActive(preserveSearch: Bool = false) {
         guard ready else { return }
-        if !preserveSearch { closeSearch(focus: false) }
+        if !preserveSearch || store.active == nil { closeOverlay(focus: false) }
+        if model.splitIDs.count == 2 && (!model.splitIDs.contains(store.state.activeTabId ?? "") || model.splitIDs.contains(where: { id in !store.currentTabs.contains { $0.id == id } })) { model.splitIDs = [] }
+        let pair = model.splitIDs
+        let first = pair.count == 2 ? pair[0] : ""
+        let second = pair.count == 2 ? pair[1] : ""
+        first.withCString { a in second.withCString { b in DerivativeSetSplit(a, b, splitRatio) } }
+        for id in pair { if let tab = store.state.tabs.first(where: { $0.id == id }) { ensurePage(tab) } }
         if let tab = store.active {
             home.isHidden = true
             tab.id.withCString { DerivativeSelectPage($0) }
-            tab.id.withCString { id in tab.spaceId.withCString { space in tab.url.withCString { url in DerivativeCreatePage(id, space, url) } } }
-            window.title = "\(tab.title) — Derivative Native"
+            ensurePage(tab)
+            window.title = "\(tab.title) — Derivative"
         } else {
             "".withCString { DerivativeSelectPage($0) }
             home.isHidden = false
             if !preserveSearch { focusSearch(in: home, select: false) }
-            window.title = "Derivative Native"
+            window.title = "Derivative"
         }
         model.error = ""; layout()
     }
     func selectTab(_ id: String) { store.select(id); showActive() }
     func selectSpace(_ id: String) { store.selectSpace(id); homeSearch.query = ""; homeSearch.selected = 0; showActive() }
     func closeTab(_ id: String) { id.withCString { DerivativeClosePage($0) } }
-    func tabClosed(_ id: String) { store.remove(id); showActive(preserveSearch: searchPanel != nil) }
+    func tabClosed(_ id: String) {
+        if let placement = pendingMoves.removeValue(forKey: id) { placeTab(id, values: placement, afterClose: true); return }
+        if let tab = store.state.tabs.first(where: { $0.id == id }) { closedTabs.insert(tab, at: 0); closedTabs = Array(closedTabs.prefix(30)) }
+        store.remove(id); showActive(preserveSearch: searchPanel != nil)
+    }
     func openFavorite(_ id: String) {
         guard let favorite = store.state.favorites.first(where: { $0.id == id }) else { return }
         if let index = store.state.tabs.firstIndex(where: { $0.spaceId == store.state.activeSpaceId && ($0.favoriteId == id || $0.url == favorite.url) }) {
@@ -158,8 +210,10 @@ import SwiftUI
     }
     func setRevealed(_ value: Bool) {
         hideWork?.cancel(); hideWork = nil
+        guard model.dragging == nil || value else { return }
         guard revealed != value else { return }
-        revealed = value; layout()
+        revealed = value
+        if value { sidebar.alphaValue = 0; layout(); animateIn(sidebar) } else { layout() }
     }
     func scheduleHide() {
         guard revealed, hideWork == nil else { return }
@@ -168,7 +222,8 @@ import SwiftUI
     }
     @objc func toggleSidebar() {
         model.pinned.toggle(); revealed = false
-        if !model.expanded {
+        if model.expanded { model.expandedSidebarMode = model.pinned ? "fixed" : "hover" }
+        else {
             normalPinned = model.pinned; store.state.preferences.sidebarMode = model.pinned ? "fixed" : "hover"; store.persist()
         }
         layout()
@@ -183,10 +238,12 @@ import SwiftUI
     func showSearch(edit: Bool) {
         hideWork?.cancel(); hideWork = nil
         guard store.active != nil else { focusSearch(in: home, select: true); return }
-        closeSearch(focus: false); searchEditsCurrent = edit
+        closeOverlay(focus: false); searchEditsCurrent = edit
         let search = SearchModel(query: edit ? model.address : ""); searchModel = search
+        searchObservation = search.$query.dropFirst().sink { [weak self] _ in DispatchQueue.main.async { self?.layout() } }
         let panel = NSHostingView(rootView: SearchView(model: search, browser: model, submit: { [weak self] text in self?.navigate(text, newTab: !edit) }, dismiss: { [weak self] in self?.closeSearch() }, choose: { [weak self] in self?.selectTab($0) }))
-        searchPanel = panel; root.addSubview(scrim); root.addSubview(panel); layout(); focusSearch(in: panel, select: edit)
+        panel.safeAreaRegions = []; panel.sizingOptions = []
+        searchPanel = panel; root.addSubview(scrim); root.addSubview(panel); layout(); animateIn(panel); focusSearch(in: panel, select: edit)
     }
     func focusSearch(in view: NSView, select: Bool) {
         DispatchQueue.main.async { [weak self, weak view] in
@@ -200,7 +257,7 @@ import SwiftUI
         }
     }
     func closeSearch(focus: Bool = true) {
-        searchPanel?.removeFromSuperview(); searchPanel = nil; searchModel = nil; scrim.removeFromSuperview()
+        searchObservation = nil; searchPanel?.removeFromSuperview(); searchPanel = nil; searchModel = nil; scrim.removeFromSuperview()
         if focus { if store.active != nil { DerivativeFocusPage() } else { focusSearch(in: home, select: false) } }
     }
     func navigate(_ text: String, newTab: Bool) {
@@ -211,11 +268,18 @@ import SwiftUI
     }
     func update(_ id: String, title: String, url: String, loading: Bool, back: Bool, forward: Bool) {
         store.update(id, title: title, url: url, loading: loading, back: back, forward: forward)
-        if id == store.state.activeTabId { window.title = "\(title) — Derivative Native" }
+        if loading, let index = store.state.tabs.firstIndex(where: { $0.id == id }), store.state.tabs[index].error != nil { store.state.tabs[index].error = nil; layoutErrors() }
+        if id == store.state.activeTabId { window.title = "\(title) — Derivative" }
     }
-    func windowDidResize(_ notification: Notification) { layout() }
+    func windowDidResize(_ notification: Notification) {
+        if window.styleMask.contains(.fullScreen) == false && ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_AUTOMATED"] != "1" {
+            let expanded = window.isZoomed
+            if expanded != model.expanded { model.expanded = expanded; if expanded { model.expandedSidebarMode = "hover" }; model.pinned = expanded ? false : normalPinned; revealed = false }
+        }
+        layout()
+    }
     func windowDidUpdate(_ notification: Notification) { alignWindowButtons() }
-    func windowDidEnterFullScreen(_ notification: Notification) { model.expanded = true; model.pinned = false; revealed = false; layout() }
+    func windowDidEnterFullScreen(_ notification: Notification) { model.expanded = true; model.expandedSidebarMode = "hover"; model.pinned = false; revealed = false; layout() }
     func windowDidExitFullScreen(_ notification: Notification) { model.expanded = false; model.pinned = normalPinned; revealed = false; layout() }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if finishingQuit { return true }
@@ -237,35 +301,51 @@ import SwiftUI
             }
             parent.submenu = sub; menu.addItem(parent)
         }
-        section("Derivative Native", [("Quit Derivative Native", #selector(NSApplication.terminate(_:)), "q")])
+        section("Derivative", [("About Derivative", #selector(about), ""), ("Settings…", #selector(settings), ","), ("Quit Derivative", #selector(NSApplication.terminate(_:)), "q")])
         section("File", [("New Tab", #selector(newSearch), "t"), ("Open Location", #selector(editSearch), "l"), ("Close Tab", #selector(closeActiveTab), "w")])
         let edit = NSMenuItem(); edit.submenu = NSMenu(title: "Edit")
         for (label, action, key) in [("Undo", "undo:", "z"), ("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] { edit.submenu?.addItem(withTitle: label, action: Selector(action), keyEquivalent: key) }
         menu.addItem(edit)
         section("View", [("Toggle Sidebar", #selector(toggleSidebar), "s"), ("Pin Tab", #selector(pinActiveTab), "d"), ("Reload", #selector(reload), "r"), ("Back", #selector(back), "["), ("Forward", #selector(forward), "]")])
+        let reopen = NSMenuItem(title: "Reopen Closed Tab", action: #selector(reopenTab), keyEquivalent: "t"); reopen.target = self; reopen.keyEquivalentModifierMask = [.command, .shift]; menu.items.first(where: { $0.submenu?.title == "File" })?.submenu?.addItem(reopen)
         NSApp.mainMenu = menu
     }
 }
 
-@MainActor private var controller: BrowserController?
+@MainActor var currentController: BrowserController?
 @_cdecl("DerivativeCreateWindow") @MainActor func createWindow() -> UnsafeMutableRawPointer {
-    let created = BrowserController(); controller = created; return Unmanaged.passUnretained(created.pageHost).toOpaque()
+    let created = BrowserController(); currentController = created; return Unmanaged.passUnretained(created.pageHost).toOpaque()
 }
-@_cdecl("DerivativeReady") @MainActor func ready(_ startup: UnsafePointer<CChar>) { controller?.bootstrap(String(cString: startup)) }
+@_cdecl("DerivativeReady") @MainActor func ready(_ startup: UnsafePointer<CChar>) { currentController?.bootstrap(String(cString: startup)) }
 @_cdecl("DerivativeUpdateTab") @MainActor func updateTab(_ id: UnsafePointer<CChar>, _ title: UnsafePointer<CChar>, _ url: UnsafePointer<CChar>, _ loading: Bool, _ back: Bool, _ forward: Bool) {
-    controller?.update(String(cString: id), title: String(cString: title), url: String(cString: url), loading: loading, back: back, forward: forward)
+    currentController?.update(String(cString: id), title: String(cString: title), url: String(cString: url), loading: loading, back: back, forward: forward)
 }
-@_cdecl("DerivativeTabClosed") @MainActor func tabClosed(_ id: UnsafePointer<CChar>) { controller?.tabClosed(String(cString: id)) }
-@_cdecl("DerivativeFinishQuit") @MainActor func finishQuit() { controller?.finishQuit() }
-@_cdecl("DerivativeCancelQuit") @MainActor func cancelQuit() { controller?.showActive() }
+@_cdecl("DerivativeTabClosed") @MainActor func tabClosed(_ id: UnsafePointer<CChar>) { currentController?.tabClosed(String(cString: id)) }
+@_cdecl("DerivativeFinishQuit") @MainActor func finishQuit() { currentController?.finishQuit() }
+@_cdecl("DerivativeCancelQuit") @MainActor func cancelQuit() { currentController?.showActive() }
 @_cdecl("DerivativeOpenPopup") @MainActor func openPopup(_ opener: UnsafePointer<CChar>, _ url: UnsafePointer<CChar>) {
-    guard let controller, let tab = controller.store.state.tabs.first(where: { $0.id == String(cString: opener) }) else { return }
+    guard let controller = currentController, let tab = controller.store.state.tabs.first(where: { $0.id == String(cString: opener) }) else { return }
     controller.store.open(String(cString: url), spaceId: tab.spaceId); controller.showActive()
 }
-@_cdecl("DerivativeShowError") @MainActor func showError(_ message: UnsafePointer<CChar>) { controller?.model.error = String(cString: message) }
+@_cdecl("DerivativeShowError") @MainActor func showError(_ message: UnsafePointer<CChar>) { currentController?.model.error = String(cString: message) }
 @_cdecl("DerivativeShortcut") @MainActor func shortcut(_ key: Int32) {
-    guard let controller else { return }
+    guard let controller = currentController else { return }
     switch key {
+    case 1100: controller.recent(1)
+    case 1101: controller.recent(-1)
+    case 1102: controller.reopenTab()
+    case 1103: controller.perform("copy")
+    case 1104: DerivativeHardReload()
+    case 1105: controller.stepTab(-1)
+    case 1106: controller.stepTab(1)
+    case 1110: controller.commitRecent()
+    case 1200: controller.stepSpace(-1)
+    case 1201: controller.stepTab(-1)
+    case 1202: controller.stepSpace(1)
+    case 1203: controller.stepTab(1)
+    case 188: controller.settings()
+    case 219: controller.back()
+    case 221: controller.forward()
     case 84: controller.newSearch()
     case 76: controller.editSearch()
     case 83: controller.toggleSidebar()
@@ -277,9 +357,20 @@ import SwiftUI
         let index = Int(key)-1001
         if controller.store.state.spaces.indices.contains(index) { controller.selectSpace(controller.store.state.spaces[index].id) }
     case 49...57:
-        let tabs = controller.store.currentTabs
+        let tabs = controller.store.orderedTabs
         let index = key == 57 ? tabs.count-1 : Int(key)-49
         if tabs.indices.contains(index) { controller.selectTab(tabs[index].id) }
     default: break
     }
+}
+
+@_cdecl("DerivativeTabError") @MainActor func tabError(_ id: UnsafePointer<CChar>, _ message: UnsafePointer<CChar>) {
+    guard let controller = currentController, let index = controller.store.state.tabs.firstIndex(where: { $0.id == String(cString: id) }) else { return }
+    controller.store.state.tabs[index].error = String(cString: message); controller.store.state.tabs[index].loading = false; controller.layoutErrors()
+}
+
+@_cdecl("DerivativeWebsiteFullscreen") @MainActor func websiteFullscreen(_ fullscreen: Bool) {
+    guard let controller = currentController else { return }
+    if fullscreen, !controller.window.styleMask.contains(.fullScreen) { controller.pageEnteredFullscreen = true; controller.window.toggleFullScreen(nil) }
+    else if !fullscreen, controller.pageEnteredFullscreen { controller.pageEnteredFullscreen = false; if controller.window.styleMask.contains(.fullScreen) { controller.window.toggleFullScreen(nil) } }
 }

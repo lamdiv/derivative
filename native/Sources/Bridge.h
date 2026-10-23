@@ -13,6 +13,16 @@ void DerivativeBack(void);
 void DerivativeForward(void);
 void DerivativeReload(void);
 void DerivativeFocusPage(void);
+void DerivativeStop(void);
+void DerivativeHardReload(void);
+void DerivativeSetSplit(const char* first, const char* second, double ratio);
+void DerivativeLayoutPages(void);
+void DerivativeClearData(const char* target);
+void DerivativeCancelDownload(const char* id);
+void DerivativeDownloadUpdate(const char* id, const char* name, const char* path, const char* status, double received, double total);
+void DerivativeCancelTabClose(const char* id);
+void DerivativePageFocused(const char* id);
+void DerivativeWebsiteFullscreen(bool fullscreen);
 void* DerivativeCreateWindow(void);
 void DerivativeReady(const char* startup_url);
 void DerivativeUpdateTab(const char* id, const char* title, const char* url, bool loading, bool back, bool forward);
@@ -21,6 +31,7 @@ void DerivativeFinishQuit(void);
 void DerivativeCancelQuit(void);
 void DerivativeOpenPopup(const char* opener, const char* url);
 void DerivativeShowError(const char* message);
+void DerivativeTabError(const char* id, const char* message);
 void DerivativeShortcut(int key);
 #ifdef __cplusplus
 }
