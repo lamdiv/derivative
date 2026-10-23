@@ -41,6 +41,7 @@ function header(snapshot, expanded = false) {
   near(row.width, sidebar.width - 28, 'Header width');
   if (!expanded) {
     assert.equal(snapshot.windowButtons.length, 3, 'All native window controls must remain available');
+    assert.ok(snapshot.systemControlsHidden.every(Boolean), 'Normal window uses sidebar controls without duplicates');
     for (const [index, button] of snapshot.windowButtons.entries()) {
       assert.equal(button.hidden, false);
       assert.equal(button.hitTarget, true, 'Traffic-light clicks must reach the actual native button');
@@ -75,16 +76,16 @@ try {
   assert.deepEqual(floating.pageBounds, hidden.pageBounds, 'Revealing the sidebar must not shift the page');
   const full = await command(driver, 'expandedLayout', { expanded: true });
   assert.equal(full.sidebarVisible, false);
-  assert.ok(full.windowButtons.every(button => button.hidden), 'Fullscreen traffic lights stay hidden');
+  assert.ok(full.windowButtons.every(button => button.hidden), 'Fullscreen sidebar traffic lights stay hidden');
   assert.equal(full.systemControlsHidden.length, 3);
-  assert.ok(full.systemControlsHidden.every(Boolean), 'Native title-bar controls stay hidden in fullscreen');
+  assert.ok(full.systemControlsHidden.every(hidden => !hidden), 'Native controls belong to the fullscreen top bar');
   assert.deepEqual(full.pageBounds, full.rootBounds, 'Fullscreen page has no padding');
   const fullReveal = await command(driver, 'revealSidebar');
   header(fullReveal, true);
   assert.ok(fullReveal.windowButtons.every(button => button.hidden), 'Revealing the fullscreen sidebar must not show traffic lights');
   await command(driver, 'systemControlsReveal');
   const afterTopHover = await command(driver, 'snapshot');
-  assert.ok(afterTopHover.systemControlsHidden.every(Boolean), 'Top-edge title-bar reveal must not expose native traffic lights');
+  assert.ok(afterTopHover.systemControlsHidden.every(hidden => !hidden), 'Top-edge title-bar reveal must retain native traffic lights');
   assert.ok(afterTopHover.windowButtons.every(button => button.hidden));
   near(fullReveal.sidebarBounds.y, 8, 'Fullscreen sidebar matches the bottom inset');
   assert.deepEqual(fullReveal.pageBounds, full.pageBounds, 'Fullscreen reveal must not resize the page');

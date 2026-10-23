@@ -61,6 +61,7 @@ import Foundation
             case "expandedLayout":
                 // Exercise fullscreen composition without moving the user's desktop into a Space.
                 controller.model.expanded = command["expanded"] as? Bool ?? true
+                controller.nativeFullscreen = controller.model.expanded
                 controller.model.pinned = !controller.model.expanded
                 controller.revealed = false
                 controller.layout()

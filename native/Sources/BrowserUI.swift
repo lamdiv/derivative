@@ -47,6 +47,7 @@ import QuartzCore
     var splitRatio = 0.5
     let splitDivider = SplitDivider()
     var pageEnteredFullscreen = false
+    var nativeFullscreen = false
     var appearanceObservation: NSKeyValueObservation?
 
 
@@ -191,10 +192,10 @@ import QuartzCore
         else { window.toggleFullScreen(nil) }
     }
     func alignWindowButtons() {
-        // AppKit may reveal its title-bar controls on a fullscreen top-edge
-        // hover. Keep those hidden in every mode; the sidebar owns our controls.
+        // AppKit's auto-hiding fullscreen title bar owns its traffic lights.
+        // Normal windows use the separate controls aligned with the sidebar.
         for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            if let button = window.standardWindowButton(type), !button.isHidden { button.isHidden = true }
+            if let button = window.standardWindowButton(type), button.isHidden != !nativeFullscreen { button.isHidden = !nativeFullscreen }
         }
         for (index, button) in windowButtons.enumerated() {
             button.isHidden = model.expanded || sidebar.isHidden || sidebarTransitioning
@@ -352,8 +353,8 @@ import QuartzCore
         layout()
     }
     func windowDidUpdate(_ notification: Notification) { alignWindowButtons() }
-    func windowDidEnterFullScreen(_ notification: Notification) { model.expanded = true; model.expandedSidebarMode = "hover"; model.pinned = false; revealed = false; layout() }
-    func windowDidExitFullScreen(_ notification: Notification) { model.expanded = false; model.pinned = normalPinned; revealed = false; layout() }
+    func windowDidEnterFullScreen(_ notification: Notification) { nativeFullscreen = true; model.expanded = true; model.expandedSidebarMode = "hover"; model.pinned = false; revealed = false; layout() }
+    func windowDidExitFullScreen(_ notification: Notification) { nativeFullscreen = false; model.expanded = false; model.pinned = normalPinned; revealed = false; layout() }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if finishingQuit { return true }
         store.flush(); DerivativeRequestQuit(); return false
