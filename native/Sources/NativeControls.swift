@@ -52,8 +52,8 @@ struct BrowserDownload: Identifiable {
     var canBack: Bool { store.active?.canBack ?? false }
     var canForward: Bool { store.active?.canForward ?? false }
     var ink: Color { dark ? .white.opacity(0.9) : Color(red: 0.19, green: 0.15, blue: 0.25) }
-    var surface: Color { dark ? Color(red: 0.16, green: 0.14, blue: 0.21) : Color(red: 0.97, green: 0.95, blue: 0.99) }
-    var wash: Color { dark ? .white.opacity(0.07) : .white.opacity(0.4) }
+    var surface: Color { dark ? Color(red: 0.115, green: 0.11, blue: 0.14) : Color(red: 0.965, green: 0.96, blue: 0.98) }
+    var wash: Color { dark ? .white.opacity(0.10) : .black.opacity(0.055) }
     var accent: Color {
         switch store.space.color {
         case "mint": return Color(red: 0.5, green: 0.74, blue: 0.62)

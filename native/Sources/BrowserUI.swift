@@ -6,11 +6,17 @@ import QuartzCore
 @MainActor final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
-@MainActor final class SidebarGlassView: NSVisualEffectView {
+@MainActor final class SidebarGlassView: NSView {
     override var isFlipped: Bool { true }
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        material = .sidebar; blendingMode = .withinWindow; state = .followsWindowActiveState
+        // SwiftUI owns the native glass on newer systems. Avoid a second blur
+        // behind it; the older fallback still needs an AppKit backdrop.
+        if #unavailable(macOS 26) {
+            let backdrop = NSVisualEffectView(frame: bounds)
+            backdrop.material = .sidebar; backdrop.blendingMode = .withinWindow; backdrop.state = .followsWindowActiveState
+            backdrop.autoresizingMask = [.width, .height]; addSubview(backdrop)
+        }
         wantsLayer = true; layer?.cornerRadius = 14; layer?.masksToBounds = true
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }

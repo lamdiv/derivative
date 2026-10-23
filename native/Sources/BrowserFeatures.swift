@@ -31,7 +31,7 @@ import SwiftUI
         let theme = store.state.preferences.theme
         window.appearance = theme == "system" ? nil : NSAppearance(named: theme == "dark" ? .darkAqua : .aqua)
         model.dark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        window.backgroundColor = model.dark ? NSColor(red: 0.13, green: 0.11, blue: 0.17, alpha: 1) : NSColor(red: 0.94, green: 0.92, blue: 0.97, alpha: 1)
+        window.backgroundColor = NSColor(model.surface)
     }
     func closeOverlay(focus: Bool = true) {
         model.siteControlsOpen = false
