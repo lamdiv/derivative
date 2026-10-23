@@ -127,7 +127,7 @@ import QuartzCore
                 }
                 if event.type == .leftMouseDown, let panel = self.auxiliaryPanel, !panel.frame.contains(point) { self.closeOverlay(); consumed = true; return }
                 if event.type == .leftMouseDown && self.searchPanel != nil && !self.searchPanel!.frame.contains(point) { self.closeSearch(); consumed = true; return }
-                if event.type == .mouseMoved && !self.model.pinned && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
+                if event.type == .mouseMoved && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
                     if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
                     else if point.x > self.store.state.preferences.sidebarWidth+24 { self.scheduleHide() }
                     else { self.hideWork?.cancel(); self.hideWork = nil; if self.sidebarHiding { self.setRevealed(true) } }
@@ -209,6 +209,7 @@ import QuartzCore
     }
     func showActive(preserveSearch: Bool = false) {
         guard ready else { return }
+        model.siteControlsOpen = false
         if !preserveSearch || store.active == nil { closeOverlay(focus: false) }
         if model.splitIDs.count == 2 && (!model.splitIDs.contains(store.state.activeTabId ?? "") || model.splitIDs.contains(where: { id in !store.currentTabs.contains { $0.id == id } })) { model.splitIDs = [] }
         let pair = model.splitIDs
@@ -289,6 +290,7 @@ import QuartzCore
         hideWork = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.18, execute: work)
     }
     @objc func toggleSidebar() {
+        model.siteControlsOpen = false
         let visible = !sidebar.isHidden
         model.pinned.toggle(); revealed = false
         if model.expanded { model.expandedSidebarMode = model.pinned ? "fixed" : "hover" }

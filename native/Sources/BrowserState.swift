@@ -93,6 +93,11 @@ struct SavedBrowserState: Codable, Equatable {
         if !["compact", "comfortable", "wide"].contains(preferences.sidebarSize) { preferences.sidebarSize = "comfortable" }
         if !["google", "duckduckgo"].contains(preferences.searchEngine) { preferences.searchEngine = "google" }
     }
+    static func displayAddress(_ text: String) -> String {
+        guard let parts = URLComponents(string: text), var host = parts.host, !host.isEmpty else { return text }
+        if host.lowercased().hasPrefix("www.") { host = String(host.dropFirst(4)) }
+        return host + (parts.port.map { ":\($0)" } ?? "")
+    }
     static func webURL(_ text: String) -> URL? {
         guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let host = url.host, !host.isEmpty else { return nil }
         return url

@@ -34,6 +34,7 @@ import SwiftUI
         window.backgroundColor = model.dark ? NSColor(red: 0.13, green: 0.11, blue: 0.17, alpha: 1) : NSColor(red: 0.94, green: 0.92, blue: 0.97, alpha: 1)
     }
     func closeOverlay(focus: Bool = true) {
+        model.siteControlsOpen = false
         auxiliaryPanel?.removeFromSuperview(); auxiliaryPanel = nil; overlayKind = ""; model.recentIDs = []
         closeSearch(focus: focus)
     }
@@ -68,6 +69,11 @@ import SwiftUI
         switch name {
         case "settings": settings()
         case "overlay.close": closeOverlay()
+        case "site.controls":
+            guard store.active != nil else { return }
+            hideWork?.cancel(); hideWork = nil; model.downloadsExpanded = false; model.siteControlsOpen.toggle()
+        case "page.zoom": if let percent = Int(values["percent"] ?? "") { DerivativeSetPageZoom(Int32(clamping: percent)) }
+        case "page.mute": DerivativeSetPageMuted(values["muted"] == "true")
         case "sidebar.toggle": toggleSidebar()
         case "favorite.edit":
             let favorite = store.state.favorites.first { $0.id == id }

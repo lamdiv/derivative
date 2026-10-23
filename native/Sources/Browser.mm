@@ -3,6 +3,8 @@
 // macOS event-loop setup adapts cefsimple under ../ThirdParty/CEF-LICENSE.txt.
 #import <AppKit/AppKit.h>
 #include <map>
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <set>
 #include <limits.h>
@@ -434,3 +436,8 @@ extern "C" bool DerivativeTestContextCommand(int command) {
 
 extern "C" bool DerivativeHasDevTools() { auto browser = Active(); return browser && browser->GetHost()->HasDevTools(); }
 extern "C" void DerivativeCloseDevTools() { if (auto browser = Active()) browser->GetHost()->CloseDevTools(); }
+
+extern "C" int DerivativePageZoom() { auto browser = Active(); return browser ? std::lround(100*std::pow(1.2, browser->GetHost()->GetZoomLevel())) : 100; }
+extern "C" void DerivativeSetPageZoom(int percent) { if (auto browser = Active()) browser->GetHost()->SetZoomLevel(std::log(std::clamp(percent, 25, 300)/100.0)/std::log(1.2)); }
+extern "C" bool DerivativePageMuted() { auto browser = Active(); return browser && browser->GetHost()->IsAudioMuted(); }
+extern "C" void DerivativeSetPageMuted(bool muted) { if (auto browser = Active()) browser->GetHost()->SetAudioMuted(muted); }

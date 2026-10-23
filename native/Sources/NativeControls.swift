@@ -25,6 +25,7 @@ struct BrowserDownload: Identifiable {
     @Published var dropTarget: String?
     @Published var downloads: [BrowserDownload] = []
     @Published var downloadsExpanded = false
+    @Published var siteControlsOpen = false
     @Published var settingsSection = "General"
     @Published var newSpaceName = ""
     @Published var newSpaceColor = "blush"
@@ -41,6 +42,7 @@ struct BrowserDownload: Identifiable {
     var duplicate: (String) -> Void = { _ in }
     var title: String { store.active?.title ?? "New tab" }
     var address: String { store.active?.url ?? "" }
+    var displayAddress: String { SavedBrowserState.displayAddress(address) }
     var canBack: Bool { store.active?.canBack ?? false }
     var canForward: Bool { store.active?.canForward ?? false }
     var ink: Color { dark ? .white.opacity(0.9) : Color(red: 0.19, green: 0.15, blue: 0.25) }
@@ -100,16 +102,7 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             header
-            if model.store.active != nil {
-                Button(action: model.search) {
-                    HStack(spacing: 9) {
-                        Image(systemName: "magnifyingglass")
-                        Text(model.address).lineLimit(1).truncationMode(.middle)
-                        Spacer(minLength: 0)
-                        Text("⌘L").font(.system(size: 10)).foregroundStyle(.secondary)
-                    }.font(.system(size: 12)).padding(11).background(model.wash, in: RoundedRectangle(cornerRadius: 11))
-                }.accessibilityLabel("Edit address")
-            }
+            if model.store.active != nil { SidebarAddressBar(model: model) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 13) {
                     HStack { Text("Favorites").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary); Spacer()

@@ -70,6 +70,25 @@ try {
   const folder = (await snapshot()).state.folders[0].id;
   await send('tab.place', { id: 'one', folderId: folder, pinned: 'true' });
   s = await snapshot(); assert.equal(s.state.tabs.find(t => t.id === 'one').folderId, folder); assert.equal(s.loadedPages, 1);
+  stage = 'address bar and site controls';
+  const controlsBefore = await snapshot(); const initialViewport = await first.evaluate(() => innerWidth);
+  assert.equal(controlsBefore.displayAddress, new URL(address).host);
+  await send('site.controls');
+  assert.equal((await snapshot()).siteControlsOpen, true);
+  assert.deepEqual((await snapshot()).pageBounds, controlsBefore.pageBounds, 'Site controls must not resize the webpage');
+  await send('page.zoom', { percent: '150' });
+  await waitFor(async () => (await snapshot()).pageZoom === 150 && await first.evaluate(() => innerWidth) < initialViewport, 'Page zoom must change actual Chromium viewport scaling');
+  for (const [input, expected] of [['999', 300], ['-20', 25], ['100', 100]]) {
+    await send('page.zoom', { percent: input });
+    await waitFor(async () => (await snapshot()).pageZoom === expected, 'Zoom clamping/reset failed');
+  }
+  await send('page.mute', { muted: 'true' }); await waitFor(async () => (await snapshot()).pageMuted, 'Mute did not reach Chromium');
+  await send('selectTab', { id: 'two' }); assert.equal((await snapshot()).pageMuted, false, 'Mute must belong to the selected tab');
+  assert.equal((await snapshot()).siteControlsOpen, false, 'Switching tabs dismisses site controls');
+  await send('selectTab', { id: 'one' }); assert.equal((await snapshot()).pageMuted, true, 'Muted tab keeps its state');
+  await send('page.mute', { muted: 'false' }); await waitFor(async () => !(await snapshot()).pageMuted, 'Unmute did not reach Chromium');
+  assert.deepEqual((await snapshot()).pageBounds, controlsBefore.pageBounds);
+  stage = 'organization';
   await send('folder.toggle', { id: folder }); assert.equal((await snapshot()).state.folders[0].collapsed, true);
   await send('folder.rename', { id: folder, name: 'Read later' }); assert.equal((await snapshot()).state.folders[0].name, 'Read later');
   await send('split.open', { id: 'two', withId: 'one' }); const second = await page('/two');

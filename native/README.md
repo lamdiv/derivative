@@ -23,6 +23,7 @@ The signed app is assembled in a repository-specific temporary directory and lin
 - **Tabs and folders:** pin, duplicate, close, reopen, reorder, and move tabs. The menu beside the Space name creates folders. Drop tabs into a folder, Pinned, Today, or another Space. Right-click menus provide the same organization actions.
 - **Spaces:** each Space has separate persistent cookies and website storage. Create, rename, recolor, delete empty Spaces, and drag to reorder their icons. Horizontal sidebar swipes animate the change and resist at either end.
 - **Split view:** drop onto the middle of another tab to join two live pages. The top and bottom edges reorder instead. A joined sidebar row stays in the original tab section and uses website icons and titles. Click either page to focus it, drag the divider to resize, and right-click the joined row to separate or close panes.
+- **Address bar:** a compact domain label, copy-link feedback, and a site-controls popover with 25–300% page zoom, zoom reset, and per-tab muting. Click the domain to edit the complete URL.
 - **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
 - **Settings:** light/dark/system appearances, pastel Space colors, search engine, restoration, browsing-data clearing, Space management, downloads, shortcuts, and About Derivative.
@@ -85,6 +86,7 @@ The comparison uses one local page, fresh profiles, seven settled process-tree R
 | `Sources/BrowserUI.swift` | Window composition, native events, lifecycle, and callbacks |
 | `Sources/BrowserFeatures.swift` | Settings, menus, shortcuts, swipes, tab moves, and split coordination |
 | `Sources/NativeControls.swift` | Sidebar, drag targets, favorites, search, and new-tab interface |
+| `Sources/SiteControls.swift` | Domain address bar, copy feedback, zoom, and tab sound controls |
 | `Sources/SettingsView.swift` | Settings, downloads, recent tabs, and page-error views |
 | `Sources/BrowserState.swift` | Validated metadata and atomic storage |
 | `Sources/Organization.swift` | Favorite/folder/tab/Space operations and gesture state |
