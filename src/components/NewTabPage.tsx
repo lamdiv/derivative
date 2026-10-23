@@ -9,8 +9,10 @@ export function NewTabPage({ state, send }: { state: BrowserState; send: (action
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
+  const resultList = useRef<HTMLDivElement>(null);
   const results = useMemo(() => suggestions(query, state), [query, state.activeSpaceId, state.activeTabId, state.tabs, state.history, state.preferences.searchEngine]);
   const index = Math.min(selected, Math.max(0, results.length - 1));
+  useEffect(() => { resultList.current?.children[index]?.scrollIntoView({ block:'nearest' }); }, [index, results]);
   useEffect(() => {
     input.current?.focus();
     return window.browser?.onSearchFocus?.(() => { input.current?.focus(); input.current?.select(); });
@@ -33,7 +35,7 @@ export function NewTabPage({ state, send }: { state: BrowserState; send: (action
           }} />
           <button type="submit" aria-label="Open search or address" disabled={!query.trim() && !results.length}><CornerDownLeft size={16} /></button>
         </form>
-        {results.length > 0 && <div className="new-tab-results" role="listbox" id="new-tab-results">{results.map((result, i) => <div tabIndex={0} key={result.id} id={`new-tab-result-${i}`} role="option" aria-selected={i === index} className={`suggestion ${i === index ? 'is-selected' : ''}`} onMouseMove={() => setSelected(i)} onClick={() => execute(result)} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) execute(result); }}>
+        {results.length > 0 && <div ref={resultList} className="new-tab-results" role="listbox" id="new-tab-results">{results.map((result, i) => <div tabIndex={0} key={result.id} id={`new-tab-result-${i}`} role="option" aria-selected={i === index} className={`suggestion ${i === index ? 'is-selected' : ''}`} onMouseMove={() => setSelected(i)} onClick={() => execute(result)} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) execute(result); }}>
           <span className="suggestion-icon">{result.kind === 'search' ? <Search size={18} /> : result.kind === 'command' ? <Command size={18} /> : <Favicon url={result.favicon} title={result.title} />}</span>
           <span className="suggestion-text"><span>{result.title}</span><small>{result.detail}</small></span>
           <span className="suggestion-kind">{result.kind === 'tab' ? <Layers2 size={14} /> : <ArrowUpRight size={14} />}</span>

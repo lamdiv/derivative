@@ -219,3 +219,9 @@ Build and 28 unit tests passed, including empty/matching queries, identical URLs
 ## Floating sidebar top alignment
 
 Expanded/fullscreen floating sidebars remove their top inset (y=0) while retaining the 8px side/bottom spacing and 14px corners. Normal-window geometry is unchanged. Build passed; the focused layout fixture checks the new top/height geometry, edge reveal/dismissal, and unchanged native webpage bounds. Fullscreen events in that fixture are simulated; macOS-owned menu-bar/notch regions are outside the renderer layout.
+
+## Stable search input position
+
+New Tab and floating search anchor their input independently of result count. Results grow downward within the remaining viewport and scroll in short windows; keyboard selection scrolls the chosen result into view. This replaces vertical centering of the whole changing panel, which moved the input as suggestions appeared or disappeared.
+
+Build/typecheck passed. `tests/search-layout.mjs` passed fixed input coordinates across zero, one, and eight results, normal/short-window resizing, viewport containment, and keyboard scrolling for both search surfaces. Short-window screenshots were visually inspected. The native interaction fixture also passed confirmation/cancellation, result closing, profile isolation, favorites, and split views.
