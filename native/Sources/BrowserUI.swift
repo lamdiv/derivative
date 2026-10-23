@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import QuartzCore
 
 @MainActor final class FlippedView: NSView {
     override var isFlipped: Bool { true }
@@ -15,7 +16,8 @@ import Combine
     let window: NSWindow
     let root = FlippedView()
     let pageHost = FlippedView()
-    let sidebar: NSHostingView<SidebarView>
+    let sidebar = FlippedView()
+    let sidebarContent: NSHostingView<SidebarView>
     let scrim = FlippedView()
     let homeSearch = SearchModel(query: "")
     var home: NSHostingView<HomeView>!
@@ -25,6 +27,9 @@ import Combine
     var searchEditsCurrent = false
     var monitor: Any?
     var hideWork: DispatchWorkItem?
+    var sidebarHiding = false
+    var sidebarTransitioning = false
+    var sidebarAnimation = 0
     var revealed = false
     var normalPinned = true
     var ready = false
@@ -48,11 +53,11 @@ import Combine
         store = BrowserStore(directory: directory)
         model = BrowserModel(store: store)
         window = BrowserWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        sidebar = NSHostingView(rootView: SidebarView(model: model))
+        sidebarContent = NSHostingView(rootView: SidebarView(model: model))
         // AppKit owns this frame, including the title-bar area. Letting the
         // hosting view apply its own safe area offsets clips the header.
-        sidebar.safeAreaRegions = []
-        sidebar.sizingOptions = []
+        sidebarContent.safeAreaRegions = []
+        sidebarContent.sizingOptions = []
         super.init()
         model.pinned = store.state.preferences.sidebarMode == "fixed"; normalPinned = model.pinned
         window.title = "Derivative"; window.appearance = NSAppearance(named: .darkAqua)
@@ -64,6 +69,8 @@ import Combine
         window.contentView = root; window.delegate = self
         root.wantsLayer = true; pageHost.wantsLayer = true
         pageHost.layer?.masksToBounds = true
+        sidebar.wantsLayer = true
+        sidebar.addSubview(sidebarContent); sidebarContent.autoresizingMask = [.width, .height]
         root.addSubview(pageHost); root.addSubview(sidebar)
         splitDivider.addGestureRecognizer(NSPanGestureRecognizer(target: self, action: #selector(resizeSplit(_:))))
         pageHost.addSubview(splitDivider)
@@ -91,6 +98,7 @@ import Combine
                 guard let self, event.window === self.window else { return }
                 if event.type == .keyDown, self.handleKey(event) { consumed = true; return }
                 if event.type == .flagsChanged, !event.modifierFlags.contains(.control), !self.model.recentIDs.isEmpty { self.commitRecent(); return }
+                if event.type == .mouseMoved && NSEvent.pressedMouseButtons & 1 == 0 { self.model.dragging = nil; self.model.dropTarget = nil }
                 if event.type == .leftMouseUp { DispatchQueue.main.async { self.model.dragging = nil; self.model.dropTarget = nil } }
                 let point = self.root.convert(event.locationInWindow, from: nil)
                 if event.type == .scrollWheel, !self.sidebar.isHidden, self.sidebar.frame.contains(point), self.auxiliaryPanel == nil, self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
@@ -101,7 +109,7 @@ import Combine
                 if event.type == .mouseMoved && !self.model.pinned && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
                     if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
                     else if point.x > self.store.state.preferences.sidebarWidth+24 { self.scheduleHide() }
-                    else { self.hideWork?.cancel(); self.hideWork = nil }
+                    else { self.hideWork?.cancel(); self.hideWork = nil; if self.sidebarHiding { self.setRevealed(true) } }
                 }
             }
             return consumed ? nil : event
@@ -126,8 +134,9 @@ import Combine
         pageHost.frame = NSRect(x: offset, y: inset, width: max(1, bounds.width-offset-inset), height: max(1, bounds.height-inset*2))
         pageHost.layer?.cornerRadius = model.expanded ? 0 : 14
         if home != nil { home.frame = pageHost.bounds }
-        sidebar.frame = NSRect(x: 8, y: model.expanded ? 0 : 8, width: width, height: bounds.height-(model.expanded ? 8 : 16))
-        sidebar.isHidden = !model.pinned && !revealed
+        sidebar.frame = NSRect(x: 8, y: 8, width: width, height: bounds.height-16)
+        sidebarContent.frame = sidebar.bounds
+        sidebar.isHidden = !model.pinned && !revealed && !sidebarHiding
         if !sidebar.isHidden { root.addSubview(sidebar, positioned: .above, relativeTo: pageHost) }
         scrim.frame = bounds
         if let panel = searchPanel {
@@ -159,12 +168,12 @@ import Combine
             let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { window.standardWindowButton($0) }
             // Showing native controls schedules a title-bar layout. Complete it
             // before positioning, otherwise a floating reveal resets their row.
-            for button in buttons where button.isHidden != sidebar.isHidden { button.isHidden = sidebar.isHidden }
+            for button in buttons where button.isHidden != (sidebar.isHidden || sidebarTransitioning) { button.isHidden = sidebar.isHidden || sidebarTransitioning }
             buttons.first?.superview?.layoutSubtreeIfNeeded()
             for (index, button) in buttons.enumerated() {
                 if let parent = button.superview {
                     let target = NSRect(x: sidebar.frame.minX+14+CGFloat(index)*20,
-                                        y: sidebar.frame.minY+5+(28-button.frame.height)/2,
+                                        y: sidebar.frame.minY+14+(28-button.frame.height)/2,
                                         width: button.frame.width, height: button.frame.height)
                     let origin = parent.convert(target, from: root).origin
                     if button.frame.origin != origin { button.setFrameOrigin(origin) }
@@ -212,21 +221,55 @@ import Combine
         hideWork?.cancel(); hideWork = nil
         guard model.dragging == nil || value else { return }
         guard revealed != value else { return }
+        let visible = !sidebar.isHidden
         revealed = value
-        if value { sidebar.alphaValue = 0; layout(); animateIn(sidebar) } else { layout() }
+        transitionSidebar(visible: model.pinned || value, wasVisible: visible)
     }
+    func transitionSidebar(visible: Bool, wasVisible: Bool) {
+        sidebarAnimation += 1
+        let generation = sidebarAnimation
+        let currentX = sidebar.layer?.presentation()?.frame.origin.x
+        sidebar.layer?.removeAllAnimations()
+        let animated = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && (ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_AUTOMATED"] != "1" || ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_ANIMATIONS"] == "1")
+        guard animated, visible != wasVisible || sidebarTransitioning else {
+            sidebarHiding = false; sidebarTransitioning = false; sidebar.alphaValue = 1; layout(); return
+        }
+        sidebarHiding = !visible; sidebarTransitioning = true
+        layout()
+        let destination = sidebar.frame
+        let sourceX = wasVisible ? (currentX ?? destination.minX) : -destination.width
+        sidebar.frame = NSRect(x: visible ? 8 : -destination.width, y: destination.minY, width: destination.width, height: destination.height)
+        sidebar.alphaValue = 1
+        guard let layer = sidebar.layer else { sidebarHiding = false; sidebarTransitioning = false; layout(); return }
+        let slide = CABasicAnimation(keyPath: "position.x")
+        slide.fromValue = sourceX + layer.position.x - sidebar.frame.minX
+        slide.toValue = layer.position.x
+        slide.duration = 0.2
+        slide.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, self.sidebarAnimation == generation else { return }
+                self.sidebarHiding = false; self.sidebarTransitioning = false; self.layout()
+            }
+        }
+        layer.add(slide, forKey: "sidebar-slide")
+        CATransaction.commit()
+    }
+
     func scheduleHide() {
         guard revealed, hideWork == nil else { return }
         let work = DispatchWorkItem { [weak self] in self?.setRevealed(false) }
         hideWork = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.18, execute: work)
     }
     @objc func toggleSidebar() {
+        let visible = !sidebar.isHidden
         model.pinned.toggle(); revealed = false
         if model.expanded { model.expandedSidebarMode = model.pinned ? "fixed" : "hover" }
         else {
             normalPinned = model.pinned; store.state.preferences.sidebarMode = model.pinned ? "fixed" : "hover"; store.persist()
         }
-        layout()
+        transitionSidebar(visible: model.pinned, wasVisible: visible)
     }
     @objc func newSearch() { showSearch(edit: false) }
     @objc func editSearch() { showSearch(edit: true) }
@@ -287,6 +330,7 @@ import Combine
     }
     func finishQuit() { finishingQuit = true; store.flush(); window.close() }
     func windowWillClose(_ notification: Notification) {
+        ready = false; sidebarAnimation += 1; sidebar.layer?.removeAllAnimations()
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
         hideWork?.cancel()
     }

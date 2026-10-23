@@ -3,6 +3,8 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
+let derivativeDragType = UTType(exportedAs: "app.derivative.browser.item", conformingTo: .data)
+
 struct BrowserDownload: Identifiable {
     var id: String, name: String, path: String, status: String
     var received: Double, total: Double
@@ -22,6 +24,7 @@ struct BrowserDownload: Identifiable {
     @Published var dragging: String?
     @Published var dropTarget: String?
     @Published var downloads: [BrowserDownload] = []
+    @Published var downloadsExpanded = false
     @Published var settingsSection = "General"
     @Published var newSpaceName = ""
     @Published var newSpaceColor = "blush"
@@ -61,7 +64,13 @@ struct BrowserDownload: Identifiable {
         guard let index = store.state.tabs.firstIndex(where: { $0.id == id }) else { return }
         store.state.tabs[index].pinned.toggle(); store.state.tabs[index].favoriteId = nil; store.state.tabs[index].folderId = nil; store.persist()
     }
-    func provider(_ token: String) -> NSItemProvider { dragging = token; return NSItemProvider(object: token as NSString) }
+    func provider(_ token: String) -> NSItemProvider {
+        dragging = token
+        let provider = NSItemProvider()
+        let data = Data(token.utf8)
+        provider.registerDataRepresentation(forTypeIdentifier: derivativeDragType.identifier, visibility: .ownProcess) { complete in complete(data, nil); return nil }
+        return provider
+    }
 }
 struct SpaceGlyph: View {
     let icon: String
@@ -112,27 +121,34 @@ struct SidebarView: View {
                             SpaceGlyph(icon: model.store.space.icon).foregroundStyle(model.accent)
                             Text(model.store.space.name).font(.system(size: 13, weight: .semibold))
                             Spacer()
-                            Menu { Button("New folder") { model.send("folder.create") }; Button("Rename Space") { model.send("space.rename", id: model.store.space.id) }; Button("Space settings") { model.settingsSection = "Spaces"; model.send("settings") } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 22)
+                            Menu { Button("New folder") { model.send("folder.create") }; Button("Rename Space") { model.send("space.rename", id: model.store.space.id) }; Button("Space settings") { model.settingsSection = "Spaces"; model.send("settings") } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
                         }.padding(.vertical, 6)
-                        if model.splitIDs.count == 2 { splitGroup }
                         groupLabel("Pinned", pinned: true)
+                        if splitAnchor?.pinned == true && splitAnchor?.folderId == nil { NativeSplitGroup(model: model) }
                         ForEach(visibleTabs.filter { $0.pinned && $0.folderId == nil }) { NativeTabRow(model: model, tab: $0) }
                         ForEach(model.store.state.folders.filter { $0.spaceId == model.store.state.activeSpaceId }) { folder in FolderRow(model: model, folder: folder) }
                         Divider().opacity(0.25).padding(.vertical, 4)
-                        groupLabel("Today", pinned: false)
-                        ForEach(visibleTabs.filter { !$0.pinned }) { NativeTabRow(model: model, tab: $0) }
-                        if model.store.active != nil && model.store.active?.favoriteId == nil {
-                            Button(action: model.newSearch) { Label("New tab", systemImage: "plus").font(.system(size: 12)).foregroundStyle(.secondary).padding(10) }.accessibilityLabel("New tab")
-                        }
-                        if visibleTabs.isEmpty && model.store.active == nil { Text("A little room for something new.").font(.system(size: 11)).foregroundStyle(.secondary).padding(.vertical, 14) }
+                        VStack(alignment: .leading, spacing: 5) {
+                            groupLabel("Today", pinned: false)
+                            if splitAnchor?.pinned == false { NativeSplitGroup(model: model) }
+                            ForEach(visibleTabs.filter { !$0.pinned }) { NativeTabRow(model: model, tab: $0) }
+                            if model.dragging?.hasPrefix("favorite:") == true {
+                                Label("Open as regular tab", systemImage: "plus").font(.system(size: 11)).foregroundStyle(.secondary).padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                            } else if model.store.active != nil && model.store.active?.favoriteId == nil {
+                                Button(action: model.newSearch) { Label("New tab", systemImage: "plus").font(.system(size: 12)).foregroundStyle(.secondary).padding(10) }.accessibilityLabel("New tab")
+                            }
+                            if visibleTabs.isEmpty && model.store.active == nil { Text("A little room for something new.").font(.system(size: 11)).foregroundStyle(.secondary).padding(.vertical, 14) }
+                        }.frame(maxWidth: .infinity, minHeight: 55, alignment: .topLeading).contentShape(Rectangle())
+                            .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "today", id: model.store.state.activeSpaceId))
                     }
                 }.padding(.bottom, 4).offset(x: model.swipeOffset)
             }.scrollIndicators(.hidden)
             if let edge = model.swipeEdge { Text(edge).font(.system(size: 10)).foregroundStyle(.secondary).frame(maxWidth: .infinity).transition(.opacity) }
             if !model.error.isEmpty { Text(model.error).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3) }
+            SidebarDownloads(model: model)
             footer
         }
-        .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 5).padding(.bottom, 14)
+        .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(model.ink)
         .background {
@@ -144,7 +160,9 @@ struct SidebarView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(model.dark ? 0.13 : 0.4), lineWidth: 1))
         .animation(.easeOut(duration: 0.16), value: model.store.state.favorites.map(\.id))
         .animation(.easeOut(duration: 0.16), value: model.store.state.activeSpaceId)
+        .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "sidebar", id: ""))
     }
+    private var splitAnchor: BrowserTab? { model.store.state.tabs.first { $0.id == model.splitIDs.first } }
     private var visibleTabs: [BrowserTab] { model.store.currentTabs.filter { $0.favoriteId == nil && !model.splitIDs.contains($0.id) } }
     private var header: some View {
         HStack(spacing: 8) {
@@ -158,8 +176,11 @@ struct SidebarView: View {
             .background { if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil { SidebarLayoutProbe() } }
     }
     private var favorites: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3), spacing: 7) {
-            ForEach(model.store.state.favorites) { favorite in
+        VStack(spacing: 7) {
+            ForEach(Array(favoriteRowSizes(model.store.state.favorites.count).enumerated()), id: \.offset) { row, count in
+                let start = favoriteRowSizes(model.store.state.favorites.count).prefix(row).reduce(0, +)
+                HStack(spacing: 7) {
+                    ForEach(Array(model.store.state.favorites.dropFirst(start).prefix(count))) { favorite in
                 Button { model.openFavorite(favorite.id) } label: {
                     SiteIcon(url: favorite.url, title: favorite.name, size: 22)
                         .frame(maxWidth: .infinity).frame(height: 43)
@@ -168,42 +189,33 @@ struct SidebarView: View {
                         .scaleEffect(model.dragging == "favorite:"+favorite.id ? 0.94 : 1)
                 }.help(favorite.name).accessibilityLabel("Open favorite \(favorite.name)")
                     .onDrag { model.provider("favorite:"+favorite.id) }
-                    .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "favorite", id: favorite.id))
+                    .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "favorite", id: favorite.id))
                     .contextMenu {
                         Button("Open") { model.openFavorite(favorite.id) }
                         Button("Edit favorite") { model.send("favorite.edit", id: favorite.id) }
                         Button("Copy address") { model.send("copy", id: favorite.url) }
                         Divider(); Button("Remove favorite") { model.store.deleteFavorite(favorite.id) }
                     }
-            }
-        }
-    }
-    private var splitGroup: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(model.splitIDs.enumerated()), id: \.element) { index, id in
-                if let tab = model.store.state.tabs.first(where: { $0.id == id }) {
-                    Button { model.selectTab(id) } label: { HStack(spacing: 5) { Text("\(index+1)").font(.system(size: 9)); SiteIcon(url: tab.url, title: tab.title); Text(tab.title).font(.system(size: 11)).lineLimit(1) }.padding(8).frame(maxWidth: .infinity).background(model.wash.opacity(model.store.state.activeTabId == id ? 1 : 0), in: RoundedRectangle(cornerRadius: 8)) }
+                    }
                 }
             }
-        }.background(model.wash, in: RoundedRectangle(cornerRadius: 10)).contextMenu { Button("Separate tabs") { model.send("split.close") }; ForEach(Array(model.splitIDs.enumerated()), id: \.element) { i, id in Button("Close pane \(i+1)") { model.closeTab(id) } } }
+        }.frame(maxWidth: .infinity, minHeight: model.store.state.favorites.isEmpty ? 43 : 0)
+            .overlay { if model.store.state.favorites.isEmpty { Text("Your favorite places go here").font(.system(size: 11)).foregroundStyle(.secondary).allowsHitTesting(false) } }
+            .contentShape(Rectangle()).onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "favoriteGrid", id: ""))
     }
     private func groupLabel(_ title: String, pinned: Bool) -> some View {
         Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
-            .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: pinned ? "pinned" : "today", id: model.store.state.activeSpaceId))
+            .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: pinned ? "pinned" : "today", id: model.store.state.activeSpaceId))
     }
     private var footer: some View {
         HStack(spacing: 4) {
-            Menu {
-                Section("Sidebar width") { ForEach(["compact", "comfortable", "wide"], id: \.self) { size in Button(size.capitalized) { model.send("preferences", ["sidebarSize": size]) } } }
-                Section("Sidebar") { ForEach(["fixed", "hover", "hidden"], id: \.self) { mode in Button(mode == "hover" ? "Floating on hover" : mode.capitalized) { model.send("preferences", ["sidebarMode": mode]) } } }
-            } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 22).accessibilityLabel("Sidebar options")
             GeometryReader { geometry in
                 ScrollView(.horizontal) { HStack(spacing: 4) {
             ForEach(model.store.state.spaces) { space in
                 Button { model.selectSpace(space.id) } label: { SpaceGlyph(icon: space.icon).font(.system(size: 12)).frame(width: 25, height: 25).background(model.wash.opacity(model.store.state.activeSpaceId == space.id ? 1 : 0), in: RoundedRectangle(cornerRadius: 8)) }
                     .help(space.name).accessibilityLabel("Switch to \(space.name) Space")
                     .onDrag { model.provider("space:"+space.id) }
-                    .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "space", id: space.id))
+                    .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "space", id: space.id))
                     .contextMenu { Button("Rename Space") { model.send("space.rename", id: space.id) }; Button("Delete empty Space") { model.send("space.delete", id: space.id) }.disabled(model.store.state.spaces.count == 1 || model.store.state.tabs.contains { $0.spaceId == space.id }) }
             }
                 }.frame(minWidth: geometry.size.width) }.scrollIndicators(.hidden)
@@ -233,7 +245,7 @@ struct NativeTabRow: View {
             if model.dropTarget == "after:"+tab.id { VStack { Spacer(); Capsule().fill(model.accent).frame(height: 2) }.allowsHitTesting(false) }
         }
         .onDrag { model.provider("tab:"+tab.id) }
-        .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "tab", id: tab.id))
+        .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "tab", id: tab.id))
         .contextMenu {
             Button(tab.pinned ? "Unpin tab" : "Pin tab") { model.pin(tab.id) }
             Button("Duplicate tab") { model.duplicate(tab.id) }
@@ -253,11 +265,12 @@ struct FolderRow: View {
             Button { model.store.toggleFolder(folder.id) } label: { HStack(spacing: 8) { Image(systemName: folder.collapsed ? "chevron.right" : "chevron.down").font(.system(size: 9)); Image(systemName: folder.collapsed ? "folder" : "folder.fill"); Text(folder.name); Spacer() }.font(.system(size: 12)).padding(9) }
                 .background(model.wash.opacity(0.5), in: RoundedRectangle(cornerRadius: 9))
                 .onDrag { model.provider("folder:"+folder.id) }
-                .onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id))
+                .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id))
                 .contextMenu { Button("Rename folder") { model.send("folder.rename", id: folder.id) }; Button("Remove folder · keep tabs") { model.store.deleteFolder(folder.id) } }
             if !folder.collapsed {
+                if model.store.state.tabs.first(where: { $0.id == model.splitIDs.first })?.folderId == folder.id { NativeSplitGroup(model: model).padding(.leading, 10) }
                 ForEach(model.store.currentTabs.filter { $0.folderId == folder.id && !model.splitIDs.contains($0.id) }) { NativeTabRow(model: model, tab: $0).padding(.leading, 10) }
-                if !model.store.currentTabs.contains(where: { $0.folderId == folder.id }) { Text("Drag tabs here").font(.system(size: 10)).foregroundStyle(.secondary).padding(10).frame(maxWidth: .infinity).onDrop(of: [UTType.text], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id)) }
+                if !model.store.currentTabs.contains(where: { $0.folderId == folder.id }) { Text("Drag tabs here").font(.system(size: 10)).foregroundStyle(.secondary).padding(10).frame(maxWidth: .infinity).onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "folder", id: folder.id)) }
             }
         }
     }
@@ -265,7 +278,19 @@ struct FolderRow: View {
 struct SidebarDrop: DropDelegate {
     let model: BrowserModel
     let kind: String, id: String
-    func validateDrop(info: DropInfo) -> Bool { model.dragging != nil }
+    func validateDrop(info: DropInfo) -> Bool { canDrop }
+    var canDrop: Bool {
+        guard let token = model.dragging else { return false }
+        if kind == "sidebar" { return token.hasPrefix("favorite:") }
+        if token.hasPrefix("favorite:") { return ["favorite", "favoriteGrid", "today", "sidebar"].contains(kind) || (kind == "tab" && model.store.state.tabs.first { $0.id == id }?.pinned == false) }
+        if token.hasPrefix("tab:"), ["favorite", "favoriteGrid"].contains(kind) { return model.store.state.favorites.count < 12 }
+        return true
+    }
+    var operation: DropOperation {
+        let favorite = model.dragging?.hasPrefix("favorite:") == true
+        let tab = model.dragging?.hasPrefix("tab:") == true
+        return (favorite && ["today", "tab"].contains(kind)) || (tab && ["favorite", "favoriteGrid"].contains(kind)) ? .copy : .move
+    }
     func dropEntered(info: DropInfo) {
         if kind == "favorite", let token = model.dragging, token.hasPrefix("favorite:") {
             let source = String(token.dropFirst(9))
@@ -277,28 +302,37 @@ struct SidebarDrop: DropDelegate {
         }
         update(info)
     }
-    func dropUpdated(info: DropInfo) -> DropProposal? { update(info); return DropProposal(operation: .move) }
+    func dropUpdated(info: DropInfo) -> DropProposal? { update(info); return DropProposal(operation: operation) }
     func dropExited(info: DropInfo) { model.dropTarget = nil }
     private func update(_ info: DropInfo) {
         if kind == "tab", let token = model.dragging, token.hasPrefix("tab:"), token != "tab:"+id { model.dropTarget = (info.location.y >= 8 && info.location.y <= 26 ? "split:" : info.location.y > 26 ? "after:" : "before:")+id }
     }
-    func performDrop(info: DropInfo) -> Bool {
+    func performDrop(info: DropInfo) -> Bool { performTokenDrop(y: info.location.y) }
+    func performTokenDrop(y: CGFloat) -> Bool {
+        guard canDrop else { return false }
         defer { model.dragging = nil; model.dropTarget = nil }
         guard let token = model.dragging else { return false }
         let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return false }
         let source = parts[1]
-        if parts[0] == "favorite" && kind == "favorite" { return true }
+        if parts[0] == "favorite" {
+            if ["favorite", "favoriteGrid"].contains(kind) { return true }
+            if ["today", "tab"].contains(kind) { model.send("favorite.newTab", id: source); return true }
+            return false
+        }
+        if parts[0] == "tab", ["favorite", "favoriteGrid"].contains(kind), let tab = model.store.state.tabs.first(where: { $0.id == source }) {
+            model.store.saveFavorite(name: tab.title, input: tab.url); return true
+        }
         if parts[0] == "space" && kind == "space" { model.store.reorderSpace(source, before: id); return true }
         if parts[0] == "folder" && kind == "folder" { model.store.reorderFolder(source, before: id); return true }
         guard parts[0] == "tab", source != id else { return false }
         if kind == "tab", let target = model.store.state.tabs.first(where: { $0.id == id }) {
-            if info.location.y >= 8 && info.location.y <= 26 { model.send("split.open", id: source, ["withId": id]) }
+            if y >= 8 && y <= 26 { model.send("split.open", id: source, ["withId": id]) }
             else {
                 let siblings = model.store.state.tabs.filter { $0.id != source && $0.spaceId == target.spaceId && $0.pinned == target.pinned && $0.folderId == target.folderId }
                 let next = siblings.firstIndex { $0.id == id }.flatMap { index in siblings.indices.contains(index+1) ? siblings[index+1].id : nil }
                 var values = ["spaceId": target.spaceId, "pinned": String(target.pinned), "folderId": target.folderId ?? ""]
-                if info.location.y <= 8 { values["beforeId"] = id } else if let next { values["beforeId"] = next }
+                if y <= 8 { values["beforeId"] = id } else if let next { values["beforeId"] = next }
                 model.send("tab.place", id: source, values)
             }
         } else if kind == "folder" { model.send("tab.place", id: source, ["folderId": id, "pinned": "true"]) }
@@ -324,7 +358,7 @@ struct SearchSuggestion: Identifiable {
     func matches(_ title: String, _ url: String) -> Bool { q.isEmpty || (title+" "+url).localizedCaseInsensitiveContains(q) }
     var results = store.currentTabs.filter { matches($0.title, $0.url) }.sorted { $0.lastActive > $1.lastActive }.prefix(5).map { SearchSuggestion(id: $0.id, title: $0.title, detail: ($0.id == store.state.activeTabId ? "Current tab" : "Switch to tab")+" · "+$0.url, url: $0.url, kind: "tab") }
     let urls = Set(results.map(\.url))
-    results += store.state.history.filter { !urls.contains($0.url) && matches($0.title, $0.url) }.prefix(4).map { SearchSuggestion(id: "history:"+$0.url, title: $0.title, detail: "History · "+$0.url, url: $0.url, kind: "history") }
+    if store.active != nil { results += store.state.history.filter { !urls.contains($0.url) && matches($0.title, $0.url) }.prefix(4).map { SearchSuggestion(id: "history:"+$0.url, title: $0.title, detail: "History · "+$0.url, url: $0.url, kind: "history") } }
     if !q.isEmpty, let url = SavedBrowserState.resolve(q, engine: store.state.preferences.searchEngine) {
         let web = !q.contains(where: \.isWhitespace) && (q.contains(".") || q.hasPrefix("http") || q.hasPrefix("localhost"))
         if web && !results.contains(where: { $0.url == url.absoluteString }) { results.insert(SearchSuggestion(id: "url", title: url.host ?? q, detail: "Open website · "+url.absoluteString, url: url.absoluteString, kind: "url"), at: 0) }

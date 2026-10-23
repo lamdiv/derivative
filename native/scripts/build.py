@@ -91,7 +91,7 @@ def main():
         data.update(extra or {})
         path.write_bytes(plistlib.dumps(data))
     info(contents / 'Info.plist', 'app.derivative.browser.native', 'Derivative',
-         {'NSPrincipalClass': 'DerivativeApplication', 'CFBundleIconFile': 'Derivative.icns', 'NSCameraUsageDescription': 'Allow websites you approve to use your camera.', 'NSMicrophoneUsageDescription': 'Allow websites you approve to use your microphone.', 'NSLocationWhenInUseUsageDescription': 'Allow websites you approve to use your location.'})
+         {'UTExportedTypeDeclarations': [{'UTTypeIdentifier': 'app.derivative.browser.item', 'UTTypeConformsTo': ['public.data'], 'UTTypeDescription': 'Derivative sidebar item'}], 'NSPrincipalClass': 'DerivativeApplication', 'CFBundleIconFile': 'Derivative.icns', 'NSCameraUsageDescription': 'Allow websites you approve to use your camera.', 'NSMicrophoneUsageDescription': 'Allow websites you approve to use your microphone.', 'NSLocationWhenInUseUsageDescription': 'Allow websites you approve to use your location.'})
     for suffix, identifier in [('', ''), (' (Alerts)', '.alerts'), (' (GPU)', '.gpu'), (' (Plugin)', '.plugin'), (' (Renderer)', '.renderer')]:
         name = 'Derivative Helper' + suffix
         helper = contents / 'Frameworks' / (name + '.app') / 'Contents'

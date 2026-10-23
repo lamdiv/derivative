@@ -72,6 +72,8 @@ import SwiftUI
         case "favorite.edit":
             let favorite = store.state.favorites.first { $0.id == id }
             prompt(favorite == nil ? "Add favorite" : "Edit favorite", fields: [("Name", favorite?.name ?? store.active?.title ?? ""), ("Website address", favorite?.url ?? store.active?.url ?? "")]) { [weak self] fields in self?.store.saveFavorite(id: favorite?.id, name: fields[0], input: fields[1]) }
+        case "favorite.newTab":
+            if let favorite = store.state.favorites.first(where: { $0.id == id }) { store.open(favorite.url); showActive() }
         case "favorite.save": store.saveFavorite(id: id.isEmpty ? nil : id, name: values["name"] ?? "", input: values["url"] ?? "")
         case "favorite.delete": store.deleteFavorite(id)
         case "favorite.reorder": store.reorderFavorite(id, before: values["beforeId"])
@@ -95,6 +97,7 @@ import SwiftUI
         case "space.reorder": store.reorderSpace(id, before: values["beforeId"] ?? "")
         case "split.open":
             guard let base = store.state.tabs.first(where: { $0.id == (values["withId"] ?? store.state.activeTabId) }), let other = store.state.tabs.first(where: { $0.id == id }), base.id != id, base.spaceId == other.spaceId else { return }
+            if let folder = store.state.folders.firstIndex(where: { $0.id == base.folderId }) { store.state.folders[folder].collapsed = false }
             model.splitIDs = [base.id, other.id]; store.select(base.id); splitRatio = 0.5; showActive()
         case "split.close": model.splitIDs = []; showActive()
         case "split.ratio": splitRatio = min(0.8, max(0.2, Double(values["ratio"] ?? "") ?? 0.5)); showActive(preserveSearch: true)
