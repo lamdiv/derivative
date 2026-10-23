@@ -143,13 +143,9 @@ struct SidebarView: View {
         .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(model.ink)
-        .background {
-            LinearGradient(colors: [model.accent.opacity(model.dark ? 0.27 : 0.65), model.accent.opacity(model.dark ? 0.12 : 0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .background(model.dark ? Color(red: 0.12, green: 0.1, blue: 0.16) : Color(red: 0.85, green: 0.82, blue: 0.9)).background(.ultraThinMaterial)
-        }
+        .derivativeGlass(model, radius: 14, kind: .sidebar)
         .preferredColorScheme(model.dark ? .dark : .light)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(model.dark ? 0.13 : 0.4), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .animation(.easeOut(duration: 0.16), value: model.store.state.favorites.map(\.id))
         .animation(.easeOut(duration: 0.16), value: model.store.state.activeSpaceId)
         .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "sidebar", id: ""))
@@ -176,7 +172,7 @@ struct SidebarView: View {
                 Button { model.openFavorite(favorite.id) } label: {
                     SiteIcon(url: favorite.url, title: favorite.name, size: 22)
                         .frame(maxWidth: .infinity).frame(height: 43)
-                        .background(model.wash, in: RoundedRectangle(cornerRadius: 11))
+                        .derivativeGlass(model, radius: 11, kind: .control)
                         .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(model.store.active?.favoriteId == favorite.id ? model.accent.opacity(0.8) : .clear, lineWidth: 1.5))
                         .scaleEffect(model.dragging == "favorite:"+favorite.id ? 0.94 : 1)
                 }.help(favorite.name).accessibilityLabel("Open favorite \(favorite.name)")
@@ -400,8 +396,7 @@ struct SearchView: View {
             } } }.frame(maxHeight: CGFloat(min(5, results.count))*60).scrollIndicators(.hidden).onChange(of: model.selected) { _, index in proxy.scrollTo(index, anchor: .center) } } }
             HStack { Text(model.query.isEmpty ? "Type an address or a search" : "↑ ↓ Select"); Spacer(); Text("↵ Open") }.font(.system(size: 10)).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.vertical, 12)
         }
-        .foregroundStyle(browser.ink).background(browser.surface.opacity(0.96), in: RoundedRectangle(cornerRadius: 18)).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.14), lineWidth: 1)).shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+        .foregroundStyle(browser.ink).derivativeGlass(browser, radius: 18, kind: .panel, elevated: true)
         .padding(1).preferredColorScheme(browser.dark ? .dark : .light).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).ignoresSafeArea()
         .onExitCommand(perform: dismiss).onMoveCommand { direction in if !results.isEmpty { if direction == .down { model.selected = (model.selected+1)%results.count }; if direction == .up { model.selected = (model.selected-1+results.count)%results.count } } }
         .onChange(of: model.query) { _, _ in model.selected = 0 }

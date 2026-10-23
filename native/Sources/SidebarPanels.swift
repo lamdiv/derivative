@@ -78,7 +78,7 @@ struct SidebarDownloads: View {
                 }.frame(height: min(330, CGFloat(model.downloads.count)*64)).scrollIndicators(.hidden)
             }
         }.padding(16).frame(width: 320)
-            .foregroundStyle(model.ink).background(model.surface.opacity(0.94))
+            .foregroundStyle(model.ink).derivativeGlass(model, radius: 14, kind: .panel)
             .buttonStyle(.plain).preferredColorScheme(model.dark ? .dark : .light)
     }
 }

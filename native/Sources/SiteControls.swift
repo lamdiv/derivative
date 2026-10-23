@@ -22,7 +22,7 @@ struct SidebarAddressBar: View {
             }.popover(isPresented: $model.siteControlsOpen, arrowEdge: .trailing) {
                 SiteControlsPanel(model: model)
             }
-        }.padding(.trailing, 5).background(model.wash, in: RoundedRectangle(cornerRadius: 11))
+        }.padding(.trailing, 5).derivativeGlass(model, radius: 11, kind: .control)
             .task(id: copiedURL) {
                 guard copiedURL != nil else { return }
                 do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
@@ -83,7 +83,7 @@ private struct SiteControlsPanel: View {
             Toggle(isOn: Binding(get: { muted }, set: { muted = $0; model.send("page.mute", ["muted": String($0)]) })) {
                 Label("Mute tab", systemImage: muted ? "speaker.slash" : "speaker.wave.2").font(.system(size: 12))
             }.toggleStyle(.switch).controlSize(.mini).accessibilityLabel("Mute current tab")
-        }.padding(16).frame(width: 260).foregroundStyle(model.ink).background(model.surface.opacity(0.96))
+        }.padding(16).frame(width: 260).foregroundStyle(model.ink).derivativeGlass(model, radius: 14, kind: .panel)
             .buttonStyle(.plain).preferredColorScheme(model.dark ? .dark : .light)
             .onAppear(perform: refresh).onChange(of: model.store.state.activeTabId) { _, _ in refresh() }
             .onChange(of: model.address) { _, _ in refresh() }

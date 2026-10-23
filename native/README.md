@@ -26,6 +26,7 @@ The signed app is assembled in a repository-specific temporary directory and lin
 - **Address bar:** a compact domain label, copy-link feedback, and a site-controls popover with 25–300% page zoom, zoom reset, and per-tab muting. Click the domain to edit the complete URL.
 - **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
+- **Surfaces:** a native visual-effect sidebar with restrained glass highlights, matching search and popover surfaces, and an opaque fallback for Reduce Transparency. Small controls use gradients rather than individual blur layers.
 - **Settings:** light/dark/system appearances, pastel Space colors, search engine, restoration, browsing-data clearing, Space management, downloads, shortcuts, and About Derivative.
 - **Downloads:** a floating panel above the footer button with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
 - **Keyboard:** Arc-style defaults, recent tabs across Spaces, reopen closed tabs, tab/Space cycling, numbered selection, hard reload, and URL copying. The complete reference is in Settings → Shortcuts.
@@ -86,6 +87,7 @@ The comparison uses one local page, fresh profiles, seven settled process-tree R
 | `Sources/BrowserUI.swift` | Window composition, native events, lifecycle, and callbacks |
 | `Sources/BrowserFeatures.swift` | Settings, menus, shortcuts, swipes, tab moves, and split coordination |
 | `Sources/NativeControls.swift` | Sidebar, drag targets, favorites, search, and new-tab interface |
+| `Sources/GlassSurface.swift` | Shared glass tint, highlights, rims, and accessibility fallback |
 | `Sources/SiteControls.swift` | Domain address bar, copy feedback, zoom, and tab sound controls |
 | `Sources/SettingsView.swift` | Settings, downloads, recent tabs, and page-error views |
 | `Sources/BrowserState.swift` | Validated metadata and atomic storage |

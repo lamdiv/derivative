@@ -6,6 +6,15 @@ import QuartzCore
 @MainActor final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
+@MainActor final class SidebarGlassView: NSVisualEffectView {
+    override var isFlipped: Bool { true }
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        material = .sidebar; blendingMode = .withinWindow; state = .followsWindowActiveState
+        wantsLayer = true; layer?.cornerRadius = 14; layer?.masksToBounds = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+}
 @MainActor final class BrowserWindow: NSWindow {
     override var canBecomeKey: Bool { ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_AUTOMATED"] != "1" }
     override var canBecomeMain: Bool { canBecomeKey }
@@ -16,7 +25,7 @@ import QuartzCore
     let window: NSWindow
     let root = FlippedView()
     let pageHost = FlippedView()
-    let sidebar = FlippedView()
+    let sidebar = SidebarGlassView(frame: .zero)
     let sidebarContent: NSHostingView<SidebarView>
     let scrim = FlippedView()
     var windowButtons: [NSButton] = []

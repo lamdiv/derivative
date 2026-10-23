@@ -26,8 +26,7 @@ struct SettingsView: View {
                 }.padding(.vertical, 5)
             }.scrollIndicators(.hidden)
         }.padding(26).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .foregroundStyle(model.ink).background(model.surface, in: RoundedRectangle(cornerRadius: 20)).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.15), lineWidth: 1))
+            .foregroundStyle(model.ink).derivativeGlass(model, radius: 20, kind: .panel, elevated: true)
             .preferredColorScheme(model.dark ? .dark : .light).onExitCommand { model.send("overlay.close") }
     }
     private func choice(_ title: String, key: String, value: String, options: [(String, String)]) -> some View {
