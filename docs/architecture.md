@@ -1,6 +1,20 @@
 # Architecture
 
-Derivative uses Electron for native Chromium pages and React for the browser interface. Websites render in `WebContentsView` instances, not iframes or webviews.
+Derivative's macOS app uses SwiftUI controls, AppKit windows, and sandboxed Chromium Embedded Framework views. Website pages run separately from the trusted Swift interface, with no privileged JavaScript bridge.
+
+## macOS implementation
+
+`native/Sources/BrowserState.swift` owns Codable metadata; `Organization.swift` implements favorite/folder/tab/Space operations. `BrowserUI.swift` composes the window, and `BrowserFeatures.swift` coordinates menus, keyboard/trackpad events, settings, downloads, and split panes. SwiftUI controls live in `NativeControls.swift` and `SettingsView.swift`.
+
+`Browser.mm` owns CEF browsers and request contexts. Each Space gets a separate persistent context. Inactive views detach while retaining live page state. Split view attaches two browsers and gives them explicit frames; selecting either pane changes the active browser for navigation and shortcuts. Search and settings are native sibling views above the webpage host and do not resize it. Moving a tab across Spaces waits for its old browser to close before opening it in the destination context; a cancelled before-unload dialog cancels the move.
+
+Metadata writes are debounced, serialized, and atomic. Website profiles are separate from Electron profiles. The existing native data path is retained for compatibility; see the [native guide](../native/README.md).
+
+Permission requests and mail/telephone links require native confirmation. Unsupported schemes are blocked. Certificates are validated. Download paths come from the native save flow; only explicit completed-download actions open files. Test launch flags enable a private local action driver and mock Keychain; neither is exposed to website JavaScript.
+
+## Electron implementation
+
+The Electron app uses React for the interface and `WebContentsView` for native Chromium pages. Its implementation details follow.
 
 ## Project layout
 

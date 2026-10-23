@@ -5,3 +5,9 @@ release/
 test-results/
 .DS_Store
 *.log
+
+# Native prototype dependencies and build artifacts
+native/.cache/
+native/build/
+__pycache__/
+*.py[cod]
