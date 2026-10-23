@@ -4,7 +4,7 @@
 
 <h1 align="center">Derivative</h1>
 <p align="center">A little space for a curious internet.<br />A native macOS browser, powered by Chromium.</p>
-<p align="center"><strong>Because Arc had a limit.</strong><br />By A Browser Guy.</p>
+
 
 Derivative (d) is an independent macOS browser inspired by the browsing habits that made Arc feel like home: Spaces, a floating sidebar, favorite places, and a search panel a shortcut away. Soft colors and familiar controls keep it simple.
 
