@@ -18,7 +18,7 @@ const snapshot=()=>command(driver,'snapshot');
 async function launch(){
   const ports=createServer();await new Promise(resolve=>ports.listen(0,'127.0.0.1',resolve));const port=ports.address().port;await new Promise(resolve=>ports.close(resolve));
   logs='';debugPort=port;
-  app=spawn(executable,[`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:profile,DERIVATIVE_NATIVE_TEST_DIRECTORY:driver,DERIVATIVE_NATIVE_TRACE:'1',DERIVATIVE_NATIVE_AUTOMATED:process.env.KEEP_NATIVE==='1'?'0':'1'},stdio:['ignore','ignore','pipe']});
+  app=spawn(executable,['--use-mock-keychain',`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:profile,DERIVATIVE_NATIVE_TEST_DIRECTORY:driver,DERIVATIVE_NATIVE_TRACE:'1',DERIVATIVE_NATIVE_AUTOMATED:process.env.KEEP_NATIVE==='1'?'0':'1'},stdio:['ignore','ignore','pipe']});
   app.stderr.on('data',chunk=>{logs+=chunk;});
   await waitFor(async()=>{try{return (await fetch(`http://127.0.0.1:${port}/json/list`)).ok;}catch{return false;}},'Native browser did not start');
 }
@@ -45,6 +45,7 @@ try{
   const search=await command(driver,'search');assert.equal(search.searchOpen,true);assert.equal(search.state.tabs.length,3);assert.deepEqual(search.pageBounds,original,'Search must not resize the page');
   await command(driver,'dismissSearch');
   await command(driver,'selectSpace',{id:'work'});const work=await page('/work');
+  assert.equal(await first.evaluate(()=>document.visibilityState),'hidden','Inactive native pages should be hidden from Chromium');
   assert.equal(await work.evaluate(()=>document.cookie),'');assert.equal(await work.evaluate(()=>localStorage.getItem('profile')),null);
   await work.evaluate(()=>{document.cookie='profile=work; Path=/; Max-Age=86400';localStorage.setItem('profile','work');});
   await command(driver,'selectSpace',{id:'personal'});

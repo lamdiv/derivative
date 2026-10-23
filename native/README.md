@@ -21,7 +21,7 @@ The signed app is assembled in a repository-specific temporary directory and lin
 
 ## What works
 
-- Real, sandbox-enabled Chromium tabs with navigation, input, close/pin/duplicate controls, and lazy restoration.
+- Real, sandbox-enabled Chromium tabs with navigation, input, close/pin/duplicate controls, and lazy restoration. Inactive views detach while remaining alive, and Chromium reports their pages as hidden.
 - A SwiftUI sidebar with the three-column favorites grid, active favorite ownership, tab rows, and compact Space icons.
 - Separate persistent website profiles for Personal, Work, and Study; loaded tabs preserve page state when switching.
 - Fixed or floating sidebar via ⌘S; left-edge hover reveals the floating sidebar.
@@ -47,9 +47,18 @@ node native/scripts/tabs-profiles.mjs
 
 This launches a fresh native profile against a local HTTP fixture and checks rendering, text input, link navigation, back-navigation form restoration, absence of Node globals in website content, and clean shutdown. Set `KEEP_NATIVE=1` to leave the fixture running for UI inspection, then quit the app normally. Remote debugging is enabled only by the test launch flags.
 
+Pure Swift state checks can also run without launching the GUI:
+
+```sh
+xcrun swiftc -swift-version 5 -module-cache-path native/.cache/swift-modules \
+  native/Sources/BrowserState.swift native/Tests/StateTests.swift \
+  -o native/build/state-tests
+native/build/state-tests
+```
+
 The tabs/profile fixture checks live form retention, lazy restoration, per-Space cookie/storage isolation, view destruction, empty-Space search reuse, popup profile ownership, restart persistence, and multi-tab quit. It uses direct page-target CDP connections because CEF profiles have distinct debugger targets.
 
-Automated windows refuse physical input and stay in the background. The native controller’s local test driver is enabled only by `DERIVATIVE_NATIVE_TEST_DIRECTORY`; it watches a private disposable directory and is absent from normal launches. It invokes native actions without exposing them to websites.
+Automated windows refuse physical input and stay in the background. Isolated fixtures pass Chromium’s standard `--use-mock-keychain` test flag so they do not access the user’s Keychain; normal app launches do not use that flag. The native controller’s local test driver is enabled only by `DERIVATIVE_NATIVE_TEST_DIRECTORY`; it watches a private disposable directory and is absent from normal launches. It invokes native actions without exposing them to websites.
 
 Native sidebar/search/window behavior was also inspected through macOS accessibility and screenshots. The automated webpage fixture does not prove every native gesture or third-party sign-in flow.
 
@@ -67,7 +76,9 @@ The script launches each app with one copy of the same local page, a fixed 288px
 
 The initial single-page prototype (`7f50bb4`) measured a median summed RSS of **654.5 MiB for the native prototype** and **841.0 MiB for Electron**. Native Chromium was 156.0.8078.17; Electron Chromium was 156.0.8078.48.
 
-These are diagnostic process totals. Shared memory can be counted more than once, the native app has fewer features, and engine patch versions differ. This is not a unique physical-memory measurement, a multi-tab benchmark, or evidence that a complete native port would use 22% less RAM. The result supports further investigation rather than replacing the existing browser immediately.
+After adding native tabs, persistent Space profiles, and the nine-favorite grid (`5249fea`), the same one-page fixture measured **693.4 MiB native versus 854.8 MiB Electron** (about 19% lower summed RSS). Both test profiles were fresh and automated windows refused physical input.
+
+These are diagnostic process totals. Shared memory can be counted more than once, the native app has fewer features, and engine patch versions differ. This is not a unique physical-memory measurement, a multi-tab benchmark, or evidence that a complete native port would use 19–22% less RAM. The result supports further investigation rather than replacing the existing browser immediately.
 
 ## Implementation
 

@@ -17,7 +17,7 @@ const portServer=createServer();await new Promise(resolve=>portServer.listen(0,'
 const port=portServer.address().port;await new Promise(resolve=>portServer.close(resolve));
 const profile=await mkdtemp(join(tmpdir(),'derivative-native-'));
 const driver=join(profile,'test-driver');
-const app=spawn(await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native')),[`--url=${address}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:profile,DERIVATIVE_NATIVE_TEST_DIRECTORY:driver,DERIVATIVE_NATIVE_TRACE:'1',DERIVATIVE_NATIVE_AUTOMATED:process.env.KEEP_NATIVE==='1'?'0':'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native')),['--use-mock-keychain',`--url=${address}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:profile,DERIVATIVE_NATIVE_TEST_DIRECTORY:driver,DERIVATIVE_NATIVE_TRACE:'1',DERIVATIVE_NATIVE_AUTOMATED:process.env.KEEP_NATIVE==='1'?'0':'1'},stdio:['ignore','pipe','pipe']});
 let logs='';app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 try {

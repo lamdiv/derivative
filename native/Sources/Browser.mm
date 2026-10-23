@@ -77,7 +77,8 @@ class BrowserClient final : public CefClient, public CefLifeSpanHandler,
     page.view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(browser->GetHost()->GetWindowHandle());
     page.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     page.view.hidden = selected != id_;
-    if (selected == id_) browser->GetHost()->SetFocus(true);
+    if (selected != id_) [page.view removeFromSuperview];
+    else browser->GetHost()->SetFocus(true);
     Publish(id_);
     if (quitting || page.closing) browser->GetHost()->CloseBrowser(false);
   }
@@ -217,7 +218,17 @@ extern "C" void DerivativeCreatePage(const char* id, const char* space, const ch
 extern "C" void DerivativeSelectPage(const char* id) {
   CEF_REQUIRE_UI_THREAD(); selected = id;
   for (auto& [key, page] : pages) {
-    page.view.hidden = key != selected;
+    const bool active = key == selected;
+    if (page.view) {
+      if (active) {
+        if (page.view.superview != host) [host addSubview:page.view];
+        page.view.frame = host.bounds;
+        page.view.hidden = NO;
+      } else {
+        page.view.hidden = YES;
+        [page.view removeFromSuperview];
+      }
+    }
     if (page.browser) page.browser->GetHost()->SetFocus(key == selected);
   }
 }
@@ -250,7 +261,10 @@ extern "C" void DerivativeFocusPage() { if (auto page = Active()) page->GetHost(
 @implementation DerivativeApplication
 - (BOOL)isHandlingSendEvent { return self.handlingSendEvent; }
 - (void)sendEvent:(NSEvent*)event { CefScopedSendingEvent scope; [super sendEvent:event]; }
-- (void)terminate:(id)sender { [self.keyWindow performClose:sender]; }
+- (void)terminate:(id)sender {
+  if (host.window) [host.window performClose:sender];
+  else DerivativeRequestQuit();
+}
 @end
 
 int main(int argc, char* argv[]) {
@@ -258,7 +272,7 @@ int main(int argc, char* argv[]) {
   if (!library.LoadInMain()) return 1;
   @autoreleasepool {
     [DerivativeApplication sharedApplication];
-    [NSApp setActivationPolicy:getenv("DERIVATIVE_NATIVE_AUTOMATED") ? NSApplicationActivationPolicyAccessory : NSApplicationActivationPolicyRegular];
+    [NSApp setActivationPolicy:(getenv("DERIVATIVE_NATIVE_AUTOMATED") && std::string(getenv("DERIVATIVE_NATIVE_AUTOMATED")) == "1") ? NSApplicationActivationPolicyAccessory : NSApplicationActivationPolicyRegular];
     CefSettings settings;
     NSString* profile = NSProcessInfo.processInfo.environment[@"DERIVATIVE_NATIVE_USER_DATA"];
     if (!profile) profile = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/Derivative Native Prototype"];

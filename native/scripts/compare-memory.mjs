@@ -35,7 +35,7 @@ const electronProfile=await mkdtemp(join(tmpdir(),'derivative-electron-memory-')
 try {
   const portServer=createServer();await new Promise(resolve=>portServer.listen(0,'127.0.0.1',resolve));
   const port=portServer.address().port;await new Promise(resolve=>portServer.close(resolve));
-  native=spawn(await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native')),[`--url=${url}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:nativeProfile,DERIVATIVE_NATIVE_AUTOMATED:'1',DERIVATIVE_NATIVE_TEST_DIRECTORY:join(nativeProfile,'test-driver')},stdio:'ignore'});
+  native=spawn(await realpath(resolve('native/build/Derivative Native.app/Contents/MacOS/Derivative Native')),['--use-mock-keychain',`--url=${url}`,`--remote-debugging-port=${port}`],{env:{...process.env,DERIVATIVE_NATIVE_USER_DATA:nativeProfile,DERIVATIVE_NATIVE_AUTOMATED:'1',DERIVATIVE_NATIVE_TEST_DIRECTORY:join(nativeProfile,'test-driver')},stdio:'ignore'});
   for(let i=0;i<60;i++){try{browser=await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:1000});break;}catch{await sleep(200);}}
   assert.ok(browser,'Native browser did not start');
   let nativePage;await waitFor(()=>{nativePage=browser.contexts().flatMap(context=>context.pages()).find(page=>page.url()===url+'/');return !!nativePage;},'Native page did not appear');await nativePage.getByRole('heading',{name:'Same page, different shell'}).waitFor();

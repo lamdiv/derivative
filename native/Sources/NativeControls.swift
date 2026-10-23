@@ -239,9 +239,9 @@ struct HomeView: View {
         GeometryReader { geometry in
             VStack(spacing: 20) {
                 NativeBrand().foregroundStyle(model.accent)
-                Text("New tab").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
+                Text("New tab").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.white.opacity(0.65))
                 SearchView(model: search, browser: model, submit: submit, dismiss: { search.query = "" }, choose: choose).frame(width: min(720, max(200, geometry.size.width-48)))
-            }.frame(maxWidth: .infinity).padding(.top, max(24, geometry.size.height*0.3-100))
+            }.frame(maxWidth: .infinity).padding(.top, max(24, geometry.size.height*0.38-110))
         }.background(Color(red: 0.15, green: 0.13, blue: 0.19)).preferredColorScheme(.dark).ignoresSafeArea()
     }
 }
