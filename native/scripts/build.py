@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build Derivative with SwiftUI, AppKit, and sandboxed Chromium on Apple Silicon."""
 import hashlib
+import argparse
 import json
 import os
 import platform
@@ -19,6 +20,19 @@ CACHE = ROOT / '.cache'
 BUILD = ROOT / 'build'
 LOCK = json.loads((ROOT / 'cef.lock.json').read_text())
 
+def file_hash(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+def validate_cef(cef):
+    header = (cef / 'include/cef_version.h').read_text()
+    if f'#define CEF_VERSION "{LOCK["version"]}"' not in header:
+        raise SystemExit('Custom CEF version must match native/cef.lock.json.')
+    binary = cef / 'Release/Chromium Embedded Framework.framework/Chromium Embedded Framework'
+    if not binary.is_file():
+        raise SystemExit('CEF distribution is missing its Release framework.')
+    return file_hash(binary)
+
 def run(*args):
     subprocess.run([str(arg) for arg in args], check=True, cwd=ROOT)
 
@@ -30,13 +44,28 @@ def sign(bundle):
     run('codesign', '--force', '--deep', '--sign', '-', bundle)
 
 def main():
+    global BUILD
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--cef-dir', type=Path, help='Use a matching local CEF binary distribution')
+    parser.add_argument('--build-dir', type=Path, default=BUILD, help='Separate output directory for candidate builds')
+    args = parser.parse_args()
+    BUILD = args.build_dir.resolve()
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
         raise SystemExit('Derivative currently targets Apple Silicon macOS only.')
     CACHE.mkdir(exist_ok=True)
-    BUILD.mkdir(exist_ok=True)
+    BUILD.mkdir(parents=True, exist_ok=True)
+    selection = CACHE / 'selected-cef.json'
+    custom = args.cef_dir
+    if custom is None and selection.exists():
+        selected = json.loads(selection.read_text())
+        if selected['version'] != LOCK['version']:
+            raise SystemExit('Selected codec engine is outdated; rebuild it for the current CEF lock.')
+        custom = Path(selected['directory'])
+        if validate_cef(custom) != selected['frameworkSha256']:
+            raise SystemExit('Selected CEF framework checksum changed; rebuild and verify it again.')
     archive = CACHE / LOCK['archive']
-    cef = CACHE / LOCK['archive'].removesuffix('.tar.bz2')
-    if not cef.exists():
+    cef = custom.resolve() if custom else CACHE / LOCK['archive'].removesuffix('.tar.bz2')
+    if not custom and not cef.exists():
         if not archive.exists():
             print('Downloading official CEF binary (about 135 MB)…', flush=True)
             temporary = archive.with_suffix('.download')
@@ -47,17 +76,20 @@ def main():
             raise SystemExit('CEF checksum mismatch; remove the cached archive before retrying.')
         with tarfile.open(archive) as bundle:
             bundle.extractall(CACHE, filter='data')
+    identity = validate_cef(cef)
     tools = CACHE / 'tools'
     if not (tools / 'bin/cmake').exists() or not (tools / 'bin/ninja').exists():
         run(sys.executable, '-m', 'venv', tools)
         run(tools / 'bin/python', '-m', 'pip', 'install', 'cmake==3.31.6', 'ninja==1.11.1.4')
     cmake = tools / 'bin/cmake'
     sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
-    run(cmake, '-S', cef, '-B', BUILD / 'cef', '-G', 'Ninja',
+    wrapper_key = hashlib.sha256((str(cef) + identity).encode()).hexdigest()[:16]
+    wrapper_build = BUILD / ('cef-' + wrapper_key)
+    run(cmake, '-S', cef, '-B', wrapper_build, '-G', 'Ninja',
         '-DCMAKE_BUILD_TYPE=Release', '-DPROJECT_ARCH=arm64',
         f'-DCMAKE_MAKE_PROGRAM={tools / "bin/ninja"}', f'-DCMAKE_OSX_SYSROOT={sdk}')
-    run(cmake, '--build', BUILD / 'cef', '--target', 'libcef_dll_wrapper', '--parallel', '6')
-    wrapper = BUILD / 'cef/libcef_dll_wrapper/libcef_dll_wrapper.a'
+    run(cmake, '--build', wrapper_build, '--target', 'libcef_dll_wrapper', '--parallel', '6')
+    wrapper = wrapper_build / 'libcef_dll_wrapper/libcef_dll_wrapper.a'
     sources = ROOT / 'Sources'
     target = 'arm64-apple-macos14.0'
     run('xcrun', 'swiftc', '-swift-version', '5', '-O', '-target', target, '-module-cache-path', CACHE / 'swift-modules',
@@ -66,7 +98,7 @@ def main():
     common = ['-std=c++20', '-O2', '-target', target, '-isysroot', sdk, '-I', cef]
     run('xcrun', 'clang++', *common, '-fobjc-arc', '-c', sources / 'Browser.mm', '-o', BUILD / 'Browser.o')
     # Sign outside File Provider folders, which can re-add FinderInfo during signing.
-    bundle_root = Path(tempfile.gettempdir()) / 'derivative-native-builds' / hashlib.sha256(str(ROOT).encode()).hexdigest()[:12]
+    bundle_root = Path(tempfile.gettempdir()) / 'derivative-native-builds' / hashlib.sha256(str(BUILD).encode()).hexdigest()[:12]
     app = bundle_root / 'Derivative.app'
     contents = app / 'Contents'
     for directory in ['MacOS', 'Frameworks', 'Resources/ThirdParty']:
@@ -78,10 +110,10 @@ def main():
     framework = 'Chromium Embedded Framework.framework'
     destination = contents / 'Frameworks' / framework
     marker = BUILD / '.cef-version'
-    if not destination.exists() or not marker.exists() or marker.read_text() != LOCK['version']:
+    if not destination.exists() or not marker.exists() or marker.read_text() != identity:
         if destination.exists(): shutil.rmtree(destination)
         run('ditto', cef / 'Release' / framework, destination)
-        marker.write_text(LOCK['version'])
+        marker.write_text(identity)
     def info(path, identifier, executable, extra=None):
         data = {'CFBundleIdentifier': identifier, 'CFBundleExecutable': executable,
                 'CFBundleName': executable, 'CFBundleDisplayName': executable,
@@ -102,6 +134,10 @@ def main():
     shutil.copy2(REPO / 'assets/icon.icns', contents / 'Resources/Derivative.icns')
     shutil.copy2(cef / 'LICENSE.txt', contents / 'Resources/ThirdParty/CEF-LICENSE.txt')
     shutil.copy2(cef / 'CREDITS.html', contents / 'Resources/ThirdParty/Chromium-CREDITS.html')
+    provenance = {'version': LOCK['version'], 'frameworkSha256': identity, 'source': 'custom' if custom else 'official'}
+    manifest = cef / 'derivative-build.json'
+    if manifest.exists(): provenance['build'] = json.loads(manifest.read_text())
+    (contents / 'Resources/ThirdParty/CEF-BUILD.json').write_text(json.dumps(provenance, indent=2)+'\n')
     sign(app)
     legacy = BUILD / 'Derivative Native.app'
     if legacy.is_symlink(): legacy.unlink()

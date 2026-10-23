@@ -1,0 +1,7 @@
+{
+  "cefCommit": "47dbc1df023e99f006fb9e850a8d83cc19b4fdd9",
+  "cefBranch": "8078",
+  "chromiumCheckout": "refs/tags/156.0.8078.17",
+  "automateSha256": "94d3ddd1e0d35482132f45dc101a593c9371b6eb2d8ff4af6cfe2734d2e48c6a",
+  "gnDefines": "is_official_build=true is_component_build=false proprietary_codecs=true ffmpeg_branding=Chrome symbol_level=0 target_cpu=\"arm64\" use_remoteexec=false chrome_pgo_phase=0"
+}

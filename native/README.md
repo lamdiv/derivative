@@ -17,6 +17,24 @@ The first build downloads an approximately 135 MB official CEF archive and insta
 
 The signed app is assembled in a repository-specific temporary directory and linked from `native/build/Derivative.app`. This avoids File Provider metadata interfering with signing in synced Desktop folders. Rebuild if temporary files are purged. Development signing is ad hoc; distribution requires Developer ID signing and notarization.
 
+## Video compatibility and engine builds
+
+The default official CEF archive supports WebM/VP9/Opus but does **not** support H.264/AAC in our playback fixture. This affects MP4 video, AAC audio, and MP4 Media Source Extensions. WebM on the project website is a fallback, not a browser-wide fix. DRM services require separate integration and are not enabled by the codec build below.
+
+The source build workflow is prepared but has not yet been run end to end: this development Mac needs full Xcode. It builds the same pinned CEF/Chromium revisions with `proprietary_codecs=true ffmpeg_branding=Chrome`; no runtime switch or replacement website player is used. Source builds require full Xcode with first-launch setup completed, an Apple Silicon Mac, at least 200 GiB free initially, and substantial download/build time. Select the installed Xcode Developer directory before running it. The ordinary prebuilt-engine app build still only needs command-line tools.
+
+```sh
+python3 native/scripts/build-codecs.py --check
+python3 native/scripts/build-codecs.py --plan
+python3 native/scripts/build-codecs.py
+```
+
+The upstream automation script is pinned by commit and SHA-256. Sources stay in `native/.cache/codec-source`; use `--work-dir /absolute/path/without/spaces` for another build volume. Source revisions, GN flags, and the depot_tools revision are recorded with the resulting engine. The script compiles an isolated candidate app, requires real WebM and H.264/AAC decoding and seeking, verifies AAC samples and MP4 MSE playback, and runs the browser rendering/navigation smoke test. Only a successful candidate is selected for subsequent app builds. If Xcode is absent or a test fails, engine selection stays unchanged. The full Chromium build and candidate acceptance remain unverified until that source build completes.
+
+Selection is recorded in ignored `native/.cache/selected-cef.json`, including the framework SHA-256. Normal app builds verify that selection and refuse an altered or outdated engine. The framework copy and C++ wrapper cache are keyed by framework bytes, so equal version numbers cannot accidentally retain the old codec-free framework. For a one-off candidate, use `python3 native/scripts/build.py --cef-dir /path/to/cef_binary_distribution --build-dir native/build/codec-candidate`. Build identity is retained inside the app at `Contents/Resources/ThirdParty/CEF-BUILD.json`. Remove the local selection file to return future builds to the official archive.
+
+Before distributing a custom engine, resolve the licensing requirements for the enabled codecs. See [Google's CEF build guidance](https://support.google.com/webdesigner/answer/10043691?hl=en) and [CEF's platform-decoding discussion](https://github.com/chromiumembedded/cef/issues/3559). The experimental OS-only route discussed there does not establish working AAC support and is not used here. No codec licensing or DRM rights are supplied by this repository.
+
 ## Everyday browsing
 
 - **Favorites:** up to twelve sites in balanced rows, with two tiles sharing a row equally. Add with the plus button, right-click to edit, copy, open, or remove, and drag to rearrange. An open favorite is highlighted in the grid.
@@ -48,11 +66,15 @@ node native/scripts/sidebar-layout.mjs
 node native/scripts/sidebar-animation.mjs
 node native/scripts/features.mjs
 node native/scripts/context-menu.mjs
+node native/scripts/media.mjs
+# Acceptance gate for an engine intended to provide H.264/AAC:
+node native/scripts/media.mjs --require-proprietary
 ```
 
 Run GUI fixtures sequentially. They use isolated profiles, a local HTTP server, and Chromium's test-only mock Keychain option. Automated windows stay in the background and ignore physical input. A private test-directory driver invokes native actions; no privileged interface is exposed to websites. Real page state is checked over per-page CDP connections.
 
 - `verify.mjs`: rendering, input, navigation, live form restoration, absence of Node globals, and shutdown.
+- `media.mjs`: decoded video frames and seeking, AAC decoded samples, and fragmented MP4 MSE playback; reports capabilities to `test-results/native-media.json`. The default mode records missing proprietary codecs; `--require-proprietary` fails unless all checks pass. `--app /path/to/Derivative.app` selects an isolated candidate.
 - `tabs-profiles.mjs`: lazy restore, retained forms, hidden background pages, view destruction, per-Space storage isolation, popup ownership, restart, and multi-tab quit.
 - `sidebar-animation.mjs`: real intermediate slide positions, rapid hover reversal, stable webpage bounds, and promotion from the empty page to regular search.
 - `sidebar-layout.mjs`: actual AppKit/SwiftUI header frames, traffic-light alignment after title-bar relayout, three widths, short windows, twelve favorites, floating reveal, and fullscreen composition without changing the desktop Space.
@@ -67,6 +89,8 @@ xcrun swiftc -swift-version 5 -module-cache-path native/.cache/swift-modules \
   native/Tests/StateTests.swift -o native/build/state-tests
 native/build/state-tests
 ```
+
+Engine package identity guards: `python3 native/Tests/EngineBuildTests.py`.
 
 The interface has also been inspected using macOS accessibility and screenshots. Automated controller checks do not establish every physical trackpad gesture, website sign-in, permission grant, save dialog, media/DRM flow, or fullscreen animation.
 
