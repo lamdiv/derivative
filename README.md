@@ -128,4 +128,4 @@ Memory use and responsiveness are still being evaluated. There is no current-bui
 
 Derivative is an early browser built around one main window. Separate browser windows, private browsing, a mini-browser, region capture, extensions, a password manager, automatic updates, and automatic tab discarding are not yet implemented. Some sign-in providers and DRM media depend on the embedded Chromium distribution.
 
-Session restoration saves tab URLs, titles, and organization. Unsaved forms and back/forward history survive ordinary tab switches, but do not survive restarting the app. Download history, split arrangements, and recently closed tabs last for the current app session. Website sign-ins persist within each Space. Data from the old Electron profiles is not automatically imported.
+Session restoration saves tab URLs, titles, and organization. Unsaved forms and back/forward history survive ordinary tab switches, but do not survive restarting the app. Download history, split arrangements, and recently closed tabs last for the current app session. Website sign-ins persist within each Space.
