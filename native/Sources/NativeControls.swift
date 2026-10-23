@@ -105,6 +105,7 @@ struct SiteIcon: View {
 }
 struct SidebarView: View {
     @ObservedObject var model: BrowserModel
+    @SidebarRowState<Bool> private var newTabHovered = false
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             header
@@ -134,7 +135,16 @@ struct SidebarView: View {
                             if model.dragging?.hasPrefix("favorite:") == true {
                                 Label("Open as regular tab", systemImage: "plus").font(.system(size: 11)).foregroundStyle(.secondary).padding(10).frame(maxWidth: .infinity, alignment: .leading)
                             } else if model.store.active != nil && model.store.active?.favoriteId == nil {
-                                Button(action: model.newSearch) { Label("New tab", systemImage: "plus").font(.system(size: 12)).foregroundStyle(.secondary).padding(10) }.accessibilityLabel("New tab")
+                                Button(action: model.newSearch) {
+                                    Label("New tab", systemImage: "plus").font(.system(size: 12))
+                                        .foregroundStyle(newTabHovered ? model.ink : model.ink.opacity(0.5))
+                                        .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                }.buttonStyle(SidebarImmediateButtonStyle()).accessibilityLabel("New tab")
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 10).fill(model.wash.opacity(newTabHovered ? 0.65 : 0))
+                                            .animation(.easeOut(duration: 0.09), value: newTabHovered).allowsHitTesting(false)
+                                    }.onHover { newTabHovered = $0 }
                             }
                             if visibleTabs.isEmpty && model.store.active == nil { Text("A little room for something new.").font(.system(size: 11)).foregroundStyle(.secondary).padding(.vertical, 14) }
                         }.frame(maxWidth: .infinity, minHeight: 55, alignment: .topLeading).contentShape(Rectangle())
