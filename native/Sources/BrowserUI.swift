@@ -321,7 +321,11 @@ import QuartzCore
                 if let field = view as? NSTextField, field.isEditable { return field }
                 return view.subviews.lazy.compactMap { editable(in: $0) }.first
             }
-            if let field = editable(in: view) { self.window.makeFirstResponder(field); if select { field.selectText(nil) } }
+            if let field = editable(in: view) {
+                self.window.makeFirstResponder(field)
+                if select { field.selectText(nil) }
+                else if let editor = field.currentEditor() { editor.selectedRange = NSRange(location: (field.stringValue as NSString).length, length: 0) }
+            }
         }
     }
     func closeSearch(focus: Bool = true) {

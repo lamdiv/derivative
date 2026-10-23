@@ -91,6 +91,7 @@ import Foundation
                 "downloads": controller.model.downloads.map { ["id": $0.id, "path": $0.path, "name": $0.name, "status": $0.status] },
                 "pageFrames": controller.pageHost.subviews.filter { $0 !== controller.home && $0 !== controller.splitDivider && !$0.isHidden }.map { rect($0.frame) },
                 "state": state, "loadedPages": DerivativePageCount(),
+                "searchSelectionLength": (controller.window.firstResponder as? NSTextView)?.selectedRange.length ?? -1,
                 "searchBounds": rect(controller.searchPanel?.frame ?? .zero), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
                 "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": rect(bounds),
                 "rootBounds": rect(controller.root.bounds), "sidebarBounds": rect(controller.sidebar.frame),
