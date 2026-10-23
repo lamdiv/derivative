@@ -26,6 +26,9 @@ struct BrowserDownload: Identifiable {
     @Published var error = ""
     @Published var splitIDs: [String] = []
     @Published var swipeOffset: CGFloat = 0
+    @Published var swipeOutgoing: NSImage?
+    @Published var swipeOutgoingOffset: CGFloat = 0
+    @Published var swipeOutgoingOrigin: CGPoint = .zero
     @Published var swipeEdge: String?
     @Published var dragging: String?
     @Published var dropTarget: String?
@@ -150,8 +153,18 @@ struct SidebarView: View {
                         }.frame(maxWidth: .infinity, minHeight: 55, alignment: .topLeading).contentShape(Rectangle())
                             .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "today", id: model.store.state.activeSpaceId))
                     }
-                }.padding(.bottom, 4).offset(x: model.swipeOffset)
+                    .background(SidebarSpaceCaptureAnchor().allowsHitTesting(false))
+                    .offset(x: model.swipeOffset)
+                    .overlay(alignment: .topLeading) {
+                        if let image = model.swipeOutgoing {
+                            Image(nsImage: image).resizable().frame(width: image.size.width, height: image.size.height)
+                                .offset(x: model.swipeOutgoingOffset + model.swipeOutgoingOrigin.x, y: model.swipeOutgoingOrigin.y)
+                                .allowsHitTesting(false).accessibilityHidden(true)
+                        }
+                    }
+                }.padding(.bottom, 4)
             }.scrollIndicators(.hidden)
+                .background(SidebarSpaceCaptureAnchor(identifier: "sidebar-space-viewport").allowsHitTesting(false))
                 .overlay(alignment: .bottom) {
                     if let edge = model.swipeEdge {
                         Text(edge).font(.system(size: 10, weight: .medium)).padding(.horizontal, 12).padding(.vertical, 7)
@@ -169,7 +182,6 @@ struct SidebarView: View {
         .preferredColorScheme(model.dark ? .dark : .light)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .animation(.easeOut(duration: 0.16), value: model.store.state.favorites.map(\.id))
-        .animation(.easeOut(duration: 0.16), value: model.store.state.activeSpaceId)
         .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "sidebar", id: ""))
     }
     private var splitAnchor: BrowserTab? { model.store.state.tabs.first { $0.id == model.splitIDs.first } }
@@ -234,6 +246,13 @@ struct SidebarView: View {
             Button { model.send("settings") } label: { Image(systemName: "slider.horizontal.3").font(.system(size: 13)).frame(width: 22) }.accessibilityLabel("Settings")
         }.frame(height: 28)
     }
+}
+private struct SidebarSpaceCaptureAnchor: NSViewRepresentable {
+    var identifier = "sidebar-space-content"
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(); view.identifier = NSUserInterfaceItemIdentifier(identifier); return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {}
 }
 struct NativeTabRow: View {
     @ObservedObject var model: BrowserModel

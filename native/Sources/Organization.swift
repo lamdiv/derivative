@@ -111,7 +111,7 @@ struct SpaceSwipe {
         let sign = x < 0 ? -1 : 1
         let outside = index+sign < 0 || index+sign >= count
         let offset = -Double(sign)*(outside ? 28*(1-exp(-abs(x)/75)) : min(48, abs(x)*0.7))
-        if !outside && abs(x) >= 52 { committed = true; return (true, 0, nil, sign) }
+        if !outside && abs(x) >= 52 { committed = true; return (true, offset, nil, sign) }
         return (true, offset, outside ? (sign < 0 ? "First Space" : "Last Space") : nil, 0)
     }
 }

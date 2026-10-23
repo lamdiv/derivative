@@ -170,19 +170,69 @@ import SwiftUI
     }
     func settleSwipe() {
         swipeReset?.cancel()
-        let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
-        withAnimation(.easeOut(duration: duration)) { model.swipeOffset = 0 }
+        swipeCapture = nil
+        if model.swipeOutgoing == nil {
+            withAnimation(swipeAnimation) { model.swipeOffset = 0 }
+        }
         let work = DispatchWorkItem { [weak self] in self?.model.swipeEdge = nil }
         swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.4, execute: work)
         let pointer = root.convert(window.mouseLocationOutsideOfEventStream, from: nil)
         if !model.pinned && !sidebar.frame.contains(pointer) { scheduleHide() }
+    }
+    var swipeAnimation: Animation {
+        .timingCurve(0.2, 0.75, 0.25, 1, duration: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.30)
+    }
+    func captureSpaceForSwipe() -> (image: NSImage, origin: CGPoint)? {
+        func anchor(_ id: String, in view: NSView) -> NSView? {
+            if view.identifier?.rawValue == id { return view }
+            for child in view.subviews { if let found = anchor(id, in: child) { return found } }
+            return nil
+        }
+        guard let content = anchor("sidebar-space-content", in: sidebarContent),
+              let viewport = anchor("sidebar-space-viewport", in: sidebarContent) else { return nil }
+        let contentRect = sidebarContent.convert(content.bounds, from: content)
+        let rect = contentRect.intersection(sidebarContent.convert(viewport.bounds, from: viewport)).intersection(sidebarContent.bounds)
+        guard !rect.isEmpty, let bitmap = sidebarContent.bitmapImageRepForCachingDisplay(in: rect) else { return nil }
+        sidebarContent.cacheDisplay(in: rect, to: bitmap)
+        let image = NSImage(size: rect.size); image.addRepresentation(bitmap)
+        return (image, CGPoint(x: rect.minX-contentRect.minX, y: rect.minY-contentRect.minY))
+    }
+    func animateSpaceSwipe(to id: String, direction: Int, offset: CGFloat) {
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let distance = CGFloat(store.state.preferences.sidebarWidth)-16
+        swipeTransition += 1
+        let generation = swipeTransition
+        var transaction = Transaction(); transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            model.swipeOutgoing = reduceMotion ? nil : swipeCapture?.image
+            model.swipeOutgoingOrigin = swipeCapture?.origin ?? .zero
+            model.swipeOutgoingOffset = offset
+            model.swipeOffset = reduceMotion ? 0 : CGFloat(direction)*distance + offset
+            selectSpace(id, duringSwipe: true)
+        }
+        swipeCapture = nil
+        // Give the incoming content one layout pass at its starting position.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.swipeTransition == generation else { return }
+            withAnimation(self.swipeAnimation) {
+                self.model.swipeOffset = 0
+                self.model.swipeOutgoingOffset = -CGFloat(direction)*distance
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now()+0.32) { [weak self] in
+                guard let self, self.swipeTransition == generation else { return }
+                self.model.swipeOutgoing = nil
+            }
+        }
     }
     func handleSwipe(dx: Double, dy: Double, time: Double, phase: SpaceSwipePhase) -> Bool {
         let index = store.state.spaces.firstIndex { $0.id == store.state.activeSpaceId } ?? 0
         let result = swipe.update(dx: dx, dy: dy, time: time, index: index, count: store.state.spaces.count, phase: phase)
         if phase == .ended || phase == .cancelled || phase == .momentumEnded { settleSwipe(); return result.consumed }
         if phase == .momentum { return result.consumed }
-        if phase == .began { swipeReset?.cancel(); model.swipeEdge = nil; model.swipeOffset = 0 }
+        if phase == .began {
+            swipeTransition += 1; swipeCapture = nil; model.swipeOutgoing = nil
+            swipeReset?.cancel(); model.swipeEdge = nil; model.swipeOffset = 0
+        }
         swipeReset?.cancel()
         if phase == .unphased {
             let work = DispatchWorkItem { [weak self] in self?.swipe = SpaceSwipe(); self?.settleSwipe() }
@@ -190,12 +240,12 @@ import SwiftUI
         }
         guard result.consumed else { return false }
         hideWork?.cancel(); hideWork = nil
-        if !swipe.committed { model.swipeOffset = result.offset; model.swipeEdge = result.edge }
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if !reduceMotion && swipeCapture == nil && (!swipe.committed || result.step != 0) { swipeCapture = captureSpaceForSwipe() }
+        if !swipe.committed { model.swipeOffset = reduceMotion ? 0 : result.offset; model.swipeEdge = result.edge }
         if result.step != 0 {
-            selectSpace(store.state.spaces[index+result.step].id)
             model.swipeEdge = nil
-            model.swipeOffset = CGFloat(result.step)*35
-            withAnimation(.easeOut(duration: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18)) { model.swipeOffset = 0 }
+            animateSpaceSwipe(to: store.state.spaces[index+result.step].id, direction: result.step, offset: reduceMotion ? 0 : result.offset)
         }
         return true
     }

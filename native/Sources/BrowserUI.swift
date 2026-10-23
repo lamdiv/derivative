@@ -59,6 +59,8 @@ import QuartzCore
     var pendingMoves: [String: [String: String]] = [:]
     var swipe = SpaceSwipe()
     var swipeReset: DispatchWorkItem?
+    var swipeCapture: (image: NSImage, origin: CGPoint)?
+    var swipeTransition = 0
     var splitRatio = 0.5
     let splitDivider = SplitDivider()
     var pageEnteredFullscreen = false
@@ -246,7 +248,13 @@ import QuartzCore
         model.error = ""; layout()
     }
     func selectTab(_ id: String) { store.select(id); showActive() }
-    func selectSpace(_ id: String) { store.selectSpace(id); homeSearch.query = ""; homeSearch.selected = 0; showActive() }
+    func selectSpace(_ id: String, duringSwipe: Bool = false) {
+        if !duringSwipe {
+            swipeTransition += 1; swipeCapture = nil; swipe = SpaceSwipe(); swipeReset?.cancel()
+            model.swipeOutgoing = nil; model.swipeOffset = 0; model.swipeEdge = nil
+        }
+        store.selectSpace(id); homeSearch.query = ""; homeSearch.selected = 0; showActive()
+    }
     func closeTab(_ id: String) { id.withCString { DerivativeClosePage($0) } }
     func tabClosed(_ id: String) {
         if let placement = pendingMoves.removeValue(forKey: id) { placeTab(id, values: placement, afterClose: true); return }

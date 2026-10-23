@@ -108,6 +108,8 @@ import Foundation
                 "sidebarPresentationX": controller.sidebar.layer?.presentation()?.frame.minX ?? controller.sidebar.frame.minX,
                 "splitIDs": controller.model.splitIDs, "overlay": controller.overlayKind,
                 "sidebarMode": controller.model.effectiveSidebarMode, "dark": controller.model.dark, "swipeEdge": controller.model.swipeEdge ?? "", "swipeOffset": controller.model.swipeOffset,
+                "swipeAnimating": controller.model.swipeOutgoing != nil, "swipePreviewCaptured": controller.swipeCapture != nil,
+                "reduceMotion": NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                 "suggestions": nativeSuggestions(command["query"] as? String ?? "", store: controller.store).map { ["id": $0.id, "kind": $0.kind, "url": $0.url] },
                 "downloads": controller.model.downloads.map { ["id": $0.id, "path": $0.path, "name": $0.name, "status": $0.status] },
                 "pageFrames": controller.pageHost.subviews.filter { $0 !== controller.home && $0 !== controller.splitDivider && !$0.isHidden }.map { rect($0.frame) },
