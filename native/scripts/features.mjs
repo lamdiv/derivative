@@ -59,7 +59,13 @@ try {
   await send('closeTab', { id: copiedID }); await waitFor(async () => !(await snapshot()).state.tabs.some(t => t.id === copiedID), 'Close copied favorite tab');
   await send('selectTab', { id: 'one' });
   const added = await send('drop', { token: 'tab:two', kind: 'favoriteGrid' }); assert.equal(added.dropOperation, 'copy'); assert.equal(added.state.favorites.length, 3);
-  await send('downloads.toggle'); assert.equal((await snapshot()).downloadsExpanded, true); await send('downloads.toggle');
+  const beforeDownloads = await snapshot();
+  await send('downloads.toggle');
+  const expandedDownloads = await snapshot();
+  assert.equal(expandedDownloads.downloadsExpanded, true);
+  assert.deepEqual(expandedDownloads.sidebarBounds, beforeDownloads.sidebarBounds, 'Downloads must float without resizing the sidebar');
+  assert.deepEqual(expandedDownloads.pageBounds, beforeDownloads.pageBounds, 'Downloads must not shift the webpage');
+  await send('downloads.toggle');
   await send('folder.create', { name: 'Reading' });
   const folder = (await snapshot()).state.folders[0].id;
   await send('tab.place', { id: 'one', folderId: folder, pinned: 'true' });

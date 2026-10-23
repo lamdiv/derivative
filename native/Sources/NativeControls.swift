@@ -145,7 +145,6 @@ struct SidebarView: View {
             }.scrollIndicators(.hidden)
             if let edge = model.swipeEdge { Text(edge).font(.system(size: 10)).foregroundStyle(.secondary).frame(maxWidth: .infinity).transition(.opacity) }
             if !model.error.isEmpty { Text(model.error).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3) }
-            SidebarDownloads(model: model)
             footer
         }
         .buttonStyle(.plain).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 14)
@@ -209,6 +208,7 @@ struct SidebarView: View {
     }
     private var footer: some View {
         HStack(spacing: 4) {
+            SidebarDownloads(model: model)
             GeometryReader { geometry in
                 ScrollView(.horizontal) { HStack(spacing: 4) {
             ForEach(model.store.state.spaces) { space in
