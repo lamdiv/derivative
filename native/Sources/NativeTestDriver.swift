@@ -23,10 +23,18 @@ import Foundation
             guard let data = try? Data(contentsOf: file), let command = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
             try? FileManager.default.removeItem(at: file)
             let id = command["id"] as? String ?? ""
+            var dropOperation = ""
             switch command["action"] as? String {
             case "selectSpace": controller.selectSpace(id)
             case "selectTab": controller.selectTab(id)
             case "closeTab": controller.closeTab(id)
+            case "drop":
+                controller.model.dragging = command["token"] as? String
+                let drop = SidebarDrop(model: controller.model, kind: command["kind"] as? String ?? "", id: id)
+                dropOperation = drop.canDrop ? (drop.operation == .copy ? "copy" : "move") : "none"
+                _ = drop.performTokenDrop(y: command["y"] as? Double ?? 0)
+                controller.model.dragging = nil
+            case "downloads.toggle": controller.model.downloadsExpanded.toggle()
             case "searchQuery": controller.searchModel?.query = command["query"] as? String ?? ""
             case "search": controller.showSearch(edit: command["edit"] as? Bool ?? false)
             case "dismissSearch": controller.closeSearch()
@@ -67,6 +75,9 @@ import Foundation
                 return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden]
             }
             let reply: [String: Any] = [
+                "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
+                "downloadsExpanded": controller.model.downloadsExpanded, "sidebarTransitioning": controller.sidebarTransitioning,
+                "sidebarPresentationX": controller.sidebar.layer?.presentation()?.frame.minX ?? controller.sidebar.frame.minX,
                 "splitIDs": controller.model.splitIDs, "overlay": controller.overlayKind,
                 "sidebarMode": controller.model.effectiveSidebarMode, "dark": controller.model.dark, "swipeEdge": controller.model.swipeEdge ?? "", "swipeOffset": controller.model.swipeOffset,
                 "suggestions": nativeSuggestions(command["query"] as? String ?? "", store: controller.store).map { ["id": $0.id, "kind": $0.kind, "url": $0.url] },

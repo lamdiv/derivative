@@ -52,6 +52,14 @@ try {
   assert.equal((await snapshot()).state.favorites[0].id, secondFavorite);
   await send('favorite.save', { id: favorite, name: 'Renamed', url: address+'/one' });
   assert.equal((await snapshot()).state.favorites.find(f => f.id === favorite).name, 'Renamed');
+  assert.deepEqual((await snapshot()).favoriteRows, [2]);
+  const gridDrop = await send('drop', { token: 'favorite:'+favorite, kind: 'favoriteGrid' }); assert.equal(gridDrop.dropOperation, 'move');
+  const favoriteTab = await send('drop', { token: 'favorite:'+favorite, kind: 'today' }); assert.equal(favoriteTab.dropOperation, 'copy');
+  const copiedID = favoriteTab.state.activeTabId; assert.equal(favoriteTab.state.tabs.find(t => t.id === copiedID).favoriteId, undefined);
+  await send('closeTab', { id: copiedID }); await waitFor(async () => !(await snapshot()).state.tabs.some(t => t.id === copiedID), 'Close copied favorite tab');
+  await send('selectTab', { id: 'one' });
+  const added = await send('drop', { token: 'tab:two', kind: 'favoriteGrid' }); assert.equal(added.dropOperation, 'copy'); assert.equal(added.state.favorites.length, 3);
+  await send('downloads.toggle'); assert.equal((await snapshot()).downloadsExpanded, true); await send('downloads.toggle');
   await send('folder.create', { name: 'Reading' });
   const folder = (await snapshot()).state.folders[0].id;
   await send('tab.place', { id: 'one', folderId: folder, pinned: 'true' });

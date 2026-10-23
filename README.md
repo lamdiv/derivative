@@ -17,7 +17,7 @@ Derivative’s macOS interface is built with SwiftUI and AppKit, with Chromium r
 - **Spaces with separate sign-ins.** Each Space has its own persistent cookies and website storage. Swipe across the sidebar or use the bottom icons to switch.
 - **A sidebar that fits.** Keep it fixed, reveal it on hover, or hide it. Choose from three widths and pastel themes, with light, dark, and system appearances.
 - **Search without the clutter.** Press **⌘T** to search or enter an address. A tab opens only when you confirm. Open-tab suggestions stay within your current Space.
-- **Your favorites, up front.** Arrange up to twelve favorites in a three-column grid. Drag to reorder; right-click to edit or remove. An open favorite stays highlighted in the grid.
+- **Your favorites, up front.** Arrange up to twelve favorites in balanced rows, with pairs filling half a row each. Drag to reorder; right-click to edit or remove. An open favorite stays highlighted in the grid.
 - **Tabs with a little organization.** Pin tabs, group them in folders, and drag them between Spaces. Tabs and organization restore when you return.
 - **Two pages, side by side.** Drag a tab onto the center of another to join them in split view. Both pages remain live, with a joined sidebar row for switching between them.
 
@@ -47,11 +47,11 @@ npm run dev
 
 **Spaces.** Manage Spaces in Settings. Swipe horizontally over the fixed or floating sidebar to switch profiles. Short gestures spring back; swiping past either end gives a gentle bounce instead of wrapping around. Moving a tab to another Space reloads it using that Space's profile.
 
-**Sidebar.** Choose Fixed, Floating on hover, or Hidden in Settings. Press **⌘S** to toggle it. In hover mode, move to the left edge to reveal it and use the top-left toggle to keep it open. The bottom-left menu offers Compact, Comfortable, and Wide sizes.
+**Sidebar.** Choose Fixed, Floating on hover, or Hidden in Settings. Press **⌘S** to toggle it. In hover mode, move to the left edge to reveal it and use the top-left toggle to keep it open. Settings offers Compact, Comfortable, and Wide sizes.
 
 **Folders and favorites.** Use the menu beside the Space name to create a folder. Drag tabs into Pinned or a folder, or onto a Space icon to move and pin them there. Use the controls above the favorites grid to add or edit favorites. Right-click menus offer the same everyday actions without dragging.
 
-**Search.** **⌘T** opens the floating search panel over a webpage. If you're already on an empty New Tab page, it focuses the existing search field. **⌘L** edits the current address. Choose a tab result to switch to it, or use its close control to close it. Escape dismisses the panel without creating a tab.
+**Search.** **⌘T** opens the floating search panel over a webpage. If you're already on an empty New Tab page, it focuses the existing search field. **⌘L** edits the current address. Choose a tab result to switch to it, or use its close control to close it. Empty Spaces omit history suggestions. Escape dismisses the panel without creating a tab.
 
 **Split view.** Drop a tab onto the center of another tab, or use its context menu to split. The top and bottom edges still reorder tabs. Click either page to focus it, drag the divider to resize, or right-click the joined row to separate the tabs. Split arrangements are temporary, while the underlying tabs persist.
 

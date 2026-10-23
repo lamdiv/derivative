@@ -248,3 +248,10 @@ The app is named Derivative throughout its bundle, menu, window titles, and Abou
 Pure Swift state/organization/gesture tests pass. Native rendering and tab/profile fixtures pass. The feature fixture verifies real split attachment, retained forms, pane widths, settings without page movement, themes, recent/reopened tabs, downloaded bytes and cancellation, cross-Space cookie isolation after moves, scoped search, swipe bounds, Space operations, cookie/history/cache clearing, and shutdown. Cache clearing supplies an explicit CEF completion callback; its regression confirms cached responses are fetched again without terminating the app. Sidebar geometry tests include native title-bar relayout and the twelve-favorite minimum window.
 
 Unlocked accessibility/screenshot inspection verified the new-tab page, sidebar, favorites, compact Space controls, and Settings/About over a live website. Controller-driven swipes and drag operations do not prove every physical trackpad/drop sequence; real website permissions, operating-system save dialogs, and all media/sign-in providers still need manual coverage. Earlier memory totals above predate this feature update and are not current measurements.
+
+
+## Sidebar interaction refinements
+
+Favorites use balanced rows (including a 2×2 layout for four items and half-width tiles in two-item rows). Internal drags use a private in-process UTI. Grid gaps explicitly accept move operations; opening a favorite as an ordinary tab and adding a tab to favorites explicitly accept copy operations. Sidebar downloads expand inline. The bottom options dots are removed, and the Space menu hides the native menu indicator. Joined split rows use website titles/icons and stay in their original pinned, Today, or folder section. Empty Spaces suppress history without deleting it.
+
+The sidebar slides as one AppKit container, with explicit position animations and generation-checked completion. Rapid hide/reveal reversal preserves visibility and webpage bounds. The animation fixture measures actual presentation-layer positions; the geometry fixture checks matching top/bottom insets and native traffic-light alignment.

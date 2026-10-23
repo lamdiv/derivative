@@ -19,14 +19,14 @@ The signed app is assembled in a repository-specific temporary directory and lin
 
 ## Everyday browsing
 
-- **Favorites:** up to twelve sites in a three-column grid. Add with the plus button, right-click to edit, copy, open, or remove, and drag to rearrange. An open favorite is highlighted in the grid.
+- **Favorites:** up to twelve sites in balanced rows, with two tiles sharing a row equally. Add with the plus button, right-click to edit, copy, open, or remove, and drag to rearrange. An open favorite is highlighted in the grid.
 - **Tabs and folders:** pin, duplicate, close, reopen, reorder, and move tabs. The menu beside the Space name creates folders. Drop tabs into a folder, Pinned, Today, or another Space. Right-click menus provide the same organization actions.
 - **Spaces:** each Space has separate persistent cookies and website storage. Create, rename, recolor, delete empty Spaces, and drag to reorder their icons. Horizontal sidebar swipes animate the change and resist at either end.
-- **Split view:** drop onto the middle of another tab to join two live pages. The top and bottom edges reorder instead. A joined sidebar row shows panes 1 and 2. Click either page to focus it, drag the divider to resize, and right-click the joined row to separate or close panes.
-- **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Results have close controls. Empty Spaces reuse their existing search field and create a tab only after confirmation.
+- **Split view:** drop onto the middle of another tab to join two live pages. The top and bottom edges reorder instead. A joined sidebar row stays in the original tab section and uses website icons and titles. Click either page to focus it, drag the divider to resize, and right-click the joined row to separate or close panes.
+- **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces omit history suggestions. Results have close controls. Empty Spaces reuse their existing search field and create a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
 - **Settings:** light/dark/system appearances, pastel Space colors, search engine, restoration, browsing-data clearing, Space management, downloads, shortcuts, and About Derivative.
-- **Downloads:** native save dialogs, live progress, cancellation, and completed-file Open / Show in Finder actions.
+- **Downloads:** an expandable sidebar section with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
 - **Keyboard:** Arc-style defaults, recent tabs across Spaces, reopen closed tabs, tab/Space cycling, numbered selection, hard reload, and URL copying. The complete reference is in Settings → Shortcuts.
 - **Website handling:** HTTP(S) popups become tabs in their opener's profile; mail/telephone links require confirmation. Website permissions use native prompts. Failed pages show a native retry screen. Certificate validation remains enabled.
 
@@ -42,6 +42,7 @@ Install the repository development dependencies (`npm ci`) for Chromium integrat
 node native/scripts/verify.mjs
 node native/scripts/tabs-profiles.mjs
 node native/scripts/sidebar-layout.mjs
+node native/scripts/sidebar-animation.mjs
 node native/scripts/features.mjs
 ```
 
@@ -49,6 +50,7 @@ Run GUI fixtures sequentially. They use isolated profiles, a local HTTP server, 
 
 - `verify.mjs`: rendering, input, navigation, live form restoration, absence of Node globals, and shutdown.
 - `tabs-profiles.mjs`: lazy restore, retained forms, hidden background pages, view destruction, per-Space storage isolation, popup ownership, restart, and multi-tab quit.
+- `sidebar-animation.mjs`: real intermediate slide positions, rapid hover reversal, stable webpage bounds, and empty-Space history suppression.
 - `sidebar-layout.mjs`: actual AppKit/SwiftUI header frames, traffic-light alignment after title-bar relayout, three widths, short windows, twelve favorites, floating reveal, and fullscreen composition without changing the desktop Space.
 - `features.mjs`: favorites/folders, split attachment and sizing, settings/themes, recent/reopened tabs, downloaded bytes and cancellation, profile-safe moves, scoped search, swipe edges, Space management, cookie/history/cache clearing, and quit.
 
@@ -56,7 +58,7 @@ Pure Swift checks:
 
 ```sh
 xcrun swiftc -swift-version 5 -module-cache-path native/.cache/swift-modules \
-  native/Sources/BrowserState.swift native/Sources/Organization.swift \
+  native/Sources/BrowserState.swift native/Sources/Organization.swift native/Sources/FavoriteLayout.swift \
   native/Tests/StateTests.swift -o native/build/state-tests
 native/build/state-tests
 ```

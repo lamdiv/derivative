@@ -35,7 +35,7 @@ function header(snapshot, expanded = false) {
   const sidebar = snapshot.sidebarBounds;
   const row = snapshot.sidebarControls.find(control => control.label === 'header')?.bounds;
   assert.ok(row, 'SwiftUI header must exist');
-  near(row.y, sidebar.y + 5, 'Header must stay inside the sidebar, including the title-bar area');
+  near(row.y, sidebar.y + 14, 'Header must stay inside the sidebar, including the title-bar area');
   near(row.height, 28, 'Header must retain its full height');
   near(row.x, sidebar.x + 14, 'Header horizontal inset');
   near(row.width, sidebar.width - 28, 'Header width');
@@ -72,7 +72,7 @@ try {
   assert.deepEqual(full.pageBounds, full.rootBounds, 'Fullscreen page has no padding');
   const fullReveal = await command(driver, 'revealSidebar');
   header(fullReveal, true);
-  near(fullReveal.sidebarBounds.y, 0, 'Fullscreen sidebar reaches the top');
+  near(fullReveal.sidebarBounds.y, 8, 'Fullscreen sidebar matches the bottom inset');
   assert.deepEqual(fullReveal.pageBounds, full.pageBounds, 'Fullscreen reveal must not resize the page');
   header(await command(driver, 'expandedLayout', { expanded: false }));
   const exited = new Promise((resolve, reject) => {
