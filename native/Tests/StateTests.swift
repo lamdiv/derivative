@@ -5,6 +5,8 @@ import Foundation
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("DerivativeStateTests-"+UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = BrowserStore(directory: directory)
+        assert(store.currentFavorites.map(\.name) == ["GitHub", "Derivative", "YouTube"])
+        assert(store.currentFavorites[0].url == "https://github.com/lamdiv/derivative")
         let personal = store.open("https://example.com/")!
         store.selectSpace("work")
         assert(store.active == nil && store.currentTabs.isEmpty)
@@ -47,6 +49,25 @@ import Foundation
         restored.saveFavorite(id: favorite, name: "Updated", input: "https://example.org/new")
         assert(restored.currentFavorites.first!.name == "Updated")
         restored.deleteFavorite(favorite); assert(!restored.state.favorites.contains { $0.id == favorite })
+        let originalDefaults = ["GitHub": "https://github.com/", "Wikipedia": "https://wikipedia.org/", "Are.na": "https://www.are.na/", "YouTube": "https://www.youtube.com/", "Reddit": "https://www.reddit.com/", "Figma": "https://www.figma.com/", "Notion": "https://www.notion.so/", "Gmail": "https://mail.google.com/", "Calendar": "https://calendar.google.com/"]
+        var oldDefaults = SavedBrowserState()
+        oldDefaults.favorites = originalDefaults.map { BrowserFavorite(id: UUID().uuidString, name: $0.key, url: $0.value, spaceId: "personal") }
+        let githubID = oldDefaults.favorites.first { $0.name == "GitHub" }!.id
+        oldDefaults.tabs = [BrowserTab(id: "old-github", spaceId: "personal", url: "https://github.com/", title: "GitHub", favoriteId: githubID, lastActive: 1)]
+        let defaultsDirectory = directory.appendingPathComponent("old-defaults")
+        try FileManager.default.createDirectory(at: defaultsDirectory, withIntermediateDirectories: true)
+        let defaultsData = try JSONEncoder().encode(oldDefaults)
+        try defaultsData.write(to: defaultsDirectory.appendingPathComponent("native-state.json"))
+        let updatedDefaults = BrowserStore(directory: defaultsDirectory)
+        assert(updatedDefaults.currentFavorites.map(\.name) == ["GitHub", "Derivative", "YouTube"])
+        let defaultsBackup = try Data(contentsOf: defaultsDirectory.appendingPathComponent("native-state-before-default-favorites.json"))
+        assert(defaultsBackup == defaultsData)
+        var customized = oldDefaults; customized.favorites[0].name = "My link"
+        assert(!customized.updateLegacyDefaultFavorites())
+        assert(oldDefaults.updateLegacyDefaultFavorites())
+        assert(oldDefaults.favorites.map(\.name) == ["GitHub", "Derivative", "YouTube"])
+        assert(oldDefaults.tabs[0].favoriteId == nil && oldDefaults.tabs[0].url == "https://github.com/")
+        assert(!oldDefaults.updateLegacyDefaultFavorites())
         let legacyDirectory = directory.appendingPathComponent("legacy")
         try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
         var legacy = SavedBrowserState(); legacy.version = 1
