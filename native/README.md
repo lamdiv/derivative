@@ -45,7 +45,7 @@ Before distributing a custom engine, resolve the licensing requirements for the 
 - **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
 - **Surfaces:** system Liquid Glass on macOS 26+ for the sidebar, search, settings, and popovers, with subtle Space tinting and quieter neutral canvas colors. macOS 14–15 retain a frosted visual-effect fallback; Reduce Transparency uses opaque surfaces. Small controls share their parent material rather than adding individual blur layers.
-- **Settings:** light/dark/system appearances, pastel Space colors, search engine, restoration, browsing-data clearing, Space management, downloads, shortcuts, and About Derivative.
+- **Settings:** separate Appearance, General, Spaces, Downloads, and Shortcuts sections. Visual Light/Dark/System cards and Lilac, Mint, Peach, Sky, and Rose swatches coordinate the glass tint and empty-page canvas. Spaces have inline color swatches; General groups search, restoration, and confirmed browsing-data clearing. Downloads include an empty state and shortcuts use readable keycaps.
 - **Downloads:** a floating panel above the footer button with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
 - **Keyboard:** Arc-style defaults, recent tabs across Spaces, reopen closed tabs, tab/Space cycling, numbered selection, hard reload, and URL copying. The complete reference is in Settings → Shortcuts.
 - **Webpage menus:** right-click links and images to open in a new tab or split view, save, copy, search by image, or inspect. Selected text offers web search; editable fields retain Chromium’s editing and spelling commands. Separate browser/private windows and a mini-browser are not implemented.
@@ -112,6 +112,7 @@ The comparison uses one local page, fresh profiles, seven settled process-tree R
 | `Sources/BrowserFeatures.swift` | Settings, menus, shortcuts, swipes, tab moves, and split coordination |
 | `Sources/NativeControls.swift` | Sidebar, drag targets, favorites, search, and new-tab interface |
 | `Sources/GlassSurface.swift` | Shared glass tint, highlights, rims, and accessibility fallback |
+| `Sources/AppearanceTheme.swift` | Coordinated pastel palettes and lightweight browser previews |
 | `Sources/SiteControls.swift` | Domain address bar, copy feedback, zoom, and tab sound controls |
 | `Sources/SettingsView.swift` | Settings, downloads, recent tabs, and page-error views |
 | `Sources/BrowserState.swift` | Validated metadata and atomic storage |

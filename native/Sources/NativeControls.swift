@@ -35,7 +35,7 @@ struct BrowserDownload: Identifiable {
     @Published var downloads: [BrowserDownload] = []
     @Published var downloadsExpanded = false
     @Published var siteControlsOpen = false
-    @Published var settingsSection = "General"
+    @Published var settingsSection = "Appearance"
     @Published var newSpaceName = ""
     @Published var newSpaceColor = "blush"
     @Published var recentIDs: [String] = []
@@ -55,17 +55,10 @@ struct BrowserDownload: Identifiable {
     var canBack: Bool { store.active?.canBack ?? false }
     var canForward: Bool { store.active?.canForward ?? false }
     var ink: Color { dark ? .white.opacity(0.9) : Color(red: 0.19, green: 0.15, blue: 0.25) }
-    var surface: Color { dark ? Color(red: 0.115, green: 0.11, blue: 0.14) : Color(red: 0.965, green: 0.96, blue: 0.98) }
+    var palette: SpacePalette { .named(store.space.color) }
+    var surface: Color { palette.surface(dark: dark) }
     var wash: Color { dark ? .white.opacity(0.10) : .black.opacity(0.055) }
-    var accent: Color {
-        switch store.space.color {
-        case "mint": return Color(red: 0.5, green: 0.74, blue: 0.62)
-        case "peach": return Color(red: 0.85, green: 0.65, blue: 0.51)
-        case "blue": return Color(red: 0.53, green: 0.68, blue: 0.85)
-        case "blush": return Color(red: 0.83, green: 0.56, blue: 0.7)
-        default: return Color(red: 0.7, green: 0.61, blue: 0.86)
-        }
-    }
+    var accent: Color { palette.accent }
     init(store: BrowserStore) {
         self.store = store
         subscription = store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }

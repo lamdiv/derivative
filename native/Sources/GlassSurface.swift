@@ -10,12 +10,12 @@ enum GlassSurfaceKind { case sidebar, panel, control }
 private struct GlassSurface: ViewModifier {
     var dark: Bool
     var accent: Color
+    var surface: Color
     var radius: CGFloat
     var kind: GlassSurfaceKind
     var elevated: Bool
     @GlassEnvironment(\.accessibilityReduceTransparency) private var reduceTransparency
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
-    private var surface: Color { dark ? Color(red: 0.16, green: 0.14, blue: 0.21) : Color(red: 0.97, green: 0.95, blue: 0.99) }
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 26, *), !reduceTransparency, kind != .control {
@@ -52,6 +52,6 @@ private struct GlassSurface: ViewModifier {
 }
 extension View {
     @MainActor func derivativeGlass(_ model: BrowserModel, radius: CGFloat, kind: GlassSurfaceKind, elevated: Bool = false) -> some View {
-        modifier(GlassSurface(dark: model.dark, accent: model.accent, radius: radius, kind: kind, elevated: elevated))
+        modifier(GlassSurface(dark: model.dark, accent: model.accent, surface: model.surface, radius: radius, kind: kind, elevated: elevated))
     }
 }

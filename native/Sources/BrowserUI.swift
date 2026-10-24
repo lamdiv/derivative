@@ -253,7 +253,7 @@ import QuartzCore
             swipeTransition += 1; swipeCapture = nil; swipe = SpaceSwipe(); swipeReset?.cancel()
             model.swipeOutgoing = nil; model.swipeOffset = 0; model.swipeEdge = nil
         }
-        store.selectSpace(id); homeSearch.query = ""; homeSearch.selected = 0; showActive()
+        store.selectSpace(id); applyPreferences(); homeSearch.query = ""; homeSearch.selected = 0; showActive()
     }
     func closeTab(_ id: String) { id.withCString { DerivativeClosePage($0) } }
     func tabClosed(_ id: String) {
