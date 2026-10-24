@@ -91,3 +91,8 @@ Pure Swift checks passed for migration, backup bytes, idempotent sanitization, i
 The Electron/React application, its tests and build scripts, Vite/TypeScript configuration, and obsolete memory-comparison fixture were removed. The npm manifest now contains only pinned Playwright test tooling; `npm run build` builds the native app. Logo and compiled icon assets remain available. Earlier implementation source and checks are retained in Git history.
 
 A fresh `npm ci --ignore-scripts`, `npm test` (Swift state and three engine package checks), the native build, and all seven integration fixtures passed after cleanup. The media fixture remains a baseline check: WebM decoded and sought successfully, while H.264/AAC and MP4 MSE remain unsupported by the current engine. Relative documentation links and `git diff --check` also passed. No native browser source changed in this cleanup.
+
+
+## Pinned sidebar sizing in expanded windows
+
+Explicitly pinning the sidebar now reserves its width in maximized/fullscreen windows, matching normal-window fixed behavior. Unpinning restores edge-to-edge webpage bounds; hover reveal remains an overlay. The native build, sidebar layout and animation fixtures, and feature fixture passed. Geometry checks cover all three widths, and the feature fixture verifies both live split panes fit the remaining page area. Derivative was restarted with the updated build.
