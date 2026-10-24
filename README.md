@@ -75,7 +75,3 @@ npm run test:integration
 ```
 
 Run GUI tests sequentially. They use temporary profiles and local webpages. See the [testing guide](native/README.md#verify) and [verification notes](docs/verification.md) for coverage and limits.
-
----
-
-<p align="center">Because Arc had a limit.<br /><sub>By A Browser Guy.</sub></p>
