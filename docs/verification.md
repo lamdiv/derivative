@@ -96,3 +96,10 @@ A fresh `npm ci --ignore-scripts`, `npm test` (Swift state and three engine pack
 ## Pinned sidebar sizing in expanded windows
 
 Explicitly pinning the sidebar now reserves its width in maximized/fullscreen windows, matching normal-window fixed behavior. Unpinning restores edge-to-edge webpage bounds; hover reveal remains an overlay. The native build, sidebar layout and animation fixtures, and feature fixture passed. Geometry checks cover all three widths, and the feature fixture verifies both live split panes fit the remaining page area. Derivative was restarted with the updated build.
+
+
+## Sidebar edge resizing and fixed-page insets
+
+Sidebar widths can be dragged from 220 points to two-thirds of the content window. Custom widths persist, window shrinking reapplies the cap, and choosing a preset clears the custom value. Small inward drags stick at the minimum; releasing a deliberate drag below 132 points collapses the sidebar and restores the 288-point default on the next toggle. Hover auto-hide pauses during resizing. A pinned sidebar gives the main page 8-point outer padding and 14-point corners in normal, maximized, and fullscreen layouts; unpinned expanded pages remain edge to edge.
+
+Pure state checks cover width limits and preference persistence. Native layout checks cover the handle's hit target, a drag through its actual mouse handlers, minimum stickiness, collapse on release, toggle restoration, window clamping, preset reset, floating resize without page movement, and fixed-page insets at all presets. Sidebar slide/reversal and browser feature fixtures also pass, including real split pane sizing. Native events are injected into the resize view in the isolated fixture; this is not a physical mouse or trackpad review.

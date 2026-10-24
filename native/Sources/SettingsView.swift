@@ -68,7 +68,7 @@ struct SettingsView: View {
         HStack {
             Text(title).font(.system(size: 12, weight: .medium)); Spacer(minLength: 12)
             Picker(title, selection: Binding(get: { value }, set: { model.send("preferences", [key: $0]) })) {
-                ForEach(options, id: \.0) { id, label in Text(label).tag(id) }
+                ForEach(options, id: \.0) { id, label in Text(label).tag(id).disabled(id == "custom") }
             }.labelsHidden().frame(width: 165).controlSize(.small)
         }
     }
@@ -104,7 +104,12 @@ struct SettingsView: View {
             group("Sidebar") {
                 choice("Behavior", key: "sidebarMode", value: model.effectiveSidebarMode, options: [("fixed", "Always visible"), ("hover", "Float on hover"), ("hidden", "Hidden")])
                 Divider().opacity(0.2)
-                choice("Width", key: "sidebarSize", value: model.store.state.preferences.sidebarSize, options: [("compact", "Compact"), ("comfortable", "Comfortable"), ("wide", "Wide")])
+                choice("Width", key: "sidebarSize", value: model.store.state.preferences.customSidebarWidth == nil ? model.store.state.preferences.sidebarSize : "custom", options: (model.store.state.preferences.customSidebarWidth == nil ? [] : [("custom", "Custom")]) + [("compact", "Compact"), ("comfortable", "Comfortable"), ("wide", "Wide")])
+                if let width = model.store.state.preferences.customSidebarWidth {
+                    Text("Custom width: \(Int(width)) pt. Choose a preset to reset.").font(.system(size: 11)).foregroundStyle(.secondary)
+                } else {
+                    Text("Drag the sidebar’s right edge to resize.").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
             }
         }
     }

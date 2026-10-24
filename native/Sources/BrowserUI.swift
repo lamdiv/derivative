@@ -63,6 +63,8 @@ import QuartzCore
     var swipeTransition = 0
     var splitRatio = 0.5
     let splitDivider = SplitDivider()
+    let sidebarResizeHandle = SidebarResizeHandle()
+    var sidebarResizing = false
     var pageEnteredFullscreen = false
     var nativeFullscreen = false
     var fullscreenTransitioning = false
@@ -93,6 +95,8 @@ import QuartzCore
         sidebar.wantsLayer = true
         sidebar.addSubview(sidebarContent); sidebarContent.autoresizingMask = [.width, .height]
         root.addSubview(pageHost); root.addSubview(sidebar)
+        sidebarResizeHandle.controller = self
+        root.addSubview(sidebarResizeHandle)
         // Native AppKit controls in the content hierarchy avoid the title bar's
         // clipped hit area and automatic repositioning during sidebar reveals.
         let controlTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
@@ -144,9 +148,9 @@ import QuartzCore
                 }
                 if event.type == .leftMouseDown, let panel = self.auxiliaryPanel, !panel.frame.contains(point) { self.closeOverlay(); consumed = true; return }
                 if event.type == .leftMouseDown && self.searchPanel != nil && !self.searchPanel!.frame.contains(point) { self.closeSearch(); consumed = true; return }
-                if event.type == .mouseMoved && !self.swipe.tracking && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
+                if event.type == .mouseMoved && !self.sidebarResizing && !self.swipe.tracking && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
                     if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
-                    else if point.x > self.store.state.preferences.sidebarWidth+24 { self.scheduleHide() }
+                    else if point.x > self.sidebar.frame.maxX+16 { self.scheduleHide() }
                     else { self.hideWork?.cancel(); self.hideWork = nil; if self.sidebarHiding { self.setRevealed(true) } }
                 }
             }
@@ -166,16 +170,19 @@ import QuartzCore
     }
     func layout() {
         let bounds = root.bounds
-        let inset: CGFloat = model.expanded ? 0 : 8
-        let width = store.state.preferences.sidebarWidth
+        let inset: CGFloat = model.expanded && !model.pinned ? 0 : 8
+        let width = SidebarSizing.width(store.state.preferences.sidebarWidth, available: bounds.width)
         let offset: CGFloat = model.pinned ? width+16 : inset
         pageHost.frame = NSRect(x: offset, y: inset, width: max(1, bounds.width-offset-inset), height: max(1, bounds.height-inset*2))
-        pageHost.layer?.cornerRadius = model.expanded ? 0 : 14
+        pageHost.layer?.cornerRadius = inset == 0 ? 0 : 14
         if home != nil { home.frame = pageHost.bounds }
         sidebar.frame = NSRect(x: 8, y: 8, width: width, height: bounds.height-16)
         sidebarContent.frame = sidebar.bounds
         sidebar.isHidden = !model.pinned && !revealed && !sidebarHiding
         if !sidebar.isHidden { root.addSubview(sidebar, positioned: .above, relativeTo: pageHost) }
+        sidebarResizeHandle.frame = NSRect(x: sidebar.frame.maxX-2, y: sidebar.frame.minY+14, width: 8, height: max(0, sidebar.frame.height-28))
+        sidebarResizeHandle.isHidden = sidebar.isHidden || sidebarTransitioning || searchPanel != nil || auxiliaryPanel != nil
+        root.addSubview(sidebarResizeHandle, positioned: .above, relativeTo: sidebar)
         scrim.frame = bounds
         if let panel = searchPanel {
             root.addSubview(scrim, positioned: .above, relativeTo: sidebar)
@@ -310,7 +317,7 @@ import QuartzCore
     }
 
     func scheduleHide() {
-        guard revealed, hideWork == nil else { return }
+        guard revealed, hideWork == nil, !sidebarResizing else { return }
         let work = DispatchWorkItem { [weak self] in self?.setRevealed(false) }
         hideWork = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.18, execute: work)
     }

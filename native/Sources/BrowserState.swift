@@ -43,9 +43,17 @@ struct BrowserPreferences: Codable, Equatable {
     var theme = "system"
     var sidebarMode = "fixed"
     var sidebarSize = "comfortable"
+    var customSidebarWidth: Double? = nil
     var restoreSession = true
     var searchEngine = "google"
-    var sidebarWidth: CGFloat { sidebarSize == "compact" ? 252 : sidebarSize == "wide" ? 320 : 288 }
+    var sidebarWidth: CGFloat { CGFloat(customSidebarWidth ?? (sidebarSize == "compact" ? 252 : sidebarSize == "wide" ? 320 : 288)) }
+}
+enum SidebarSizing {
+    static let minimum: CGFloat = 220
+    static let collapseThreshold: CGFloat = 132
+    static func width(_ preferred: CGFloat, available: CGFloat) -> CGFloat {
+        min(max(minimum, preferred), max(minimum, available * 2 / 3))
+    }
 }
 struct SavedBrowserState: Codable, Equatable {
     var version = 2
@@ -127,6 +135,7 @@ struct SavedBrowserState: Codable, Equatable {
         if !["system", "light", "dark"].contains(preferences.theme) { preferences.theme = "system" }
         if !["fixed", "hover", "hidden"].contains(preferences.sidebarMode) { preferences.sidebarMode = "fixed" }
         if !["compact", "comfortable", "wide"].contains(preferences.sidebarSize) { preferences.sidebarSize = "comfortable" }
+        if let width = preferences.customSidebarWidth, !width.isFinite || width < Double(SidebarSizing.minimum) { preferences.customSidebarWidth = nil }
         if !["google", "duckduckgo"].contains(preferences.searchEngine) { preferences.searchEngine = "google" }
     }
     static func displayAddress(_ text: String) -> String {

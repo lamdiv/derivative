@@ -57,6 +57,7 @@ import Foundation
             case "revealSidebar": controller.setRevealed(command["visible"] as? Bool ?? true)
             case "sidebarSize":
                 controller.store.state.preferences.sidebarSize = id
+                controller.store.state.preferences.customSidebarWidth = nil
                 controller.layout()
             case "fullscreenPhase":
                 let notice = Notification(name: NSWindow.didResizeNotification, object: controller.window)
@@ -75,6 +76,23 @@ import Foundation
                 controller.model.pinned = !controller.model.expanded
                 controller.revealed = false
                 controller.layout()
+            case "sidebarDrag":
+                let handle = controller.sidebarResizeHandle
+                guard !handle.isHidden else { break }
+                let start = handle.convert(NSPoint(x: handle.bounds.midX, y: handle.bounds.midY), to: nil)
+                let end = NSPoint(x: start.x+(command["dx"] as? Double ?? 0), y: start.y)
+                for (type, point) in [(NSEvent.EventType.leftMouseDown, start), (.leftMouseDragged, end), (.leftMouseUp, end)] {
+                    if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                        switch type {
+                        case .leftMouseDown: handle.mouseDown(with: event)
+                        case .leftMouseDragged: handle.mouseDragged(with: event)
+                        default: handle.mouseUp(with: event)
+                        }
+                    }
+                }
+            case "sidebarResize":
+                if !controller.sidebarResizing { controller.beginSidebarResize() }
+                controller.resizeSidebar(rawWidth: CGFloat(command["width"] as? Double ?? 288), finished: command["finished"] as? Bool ?? true)
             case "resize":
                 controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
                 controller.layout()
@@ -118,6 +136,9 @@ import Foundation
                 "searchBounds": rect(controller.searchPanel?.frame ?? .zero), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
                 "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": rect(bounds),
                 "rootBounds": rect(controller.root.bounds), "sidebarBounds": rect(controller.sidebar.frame),
+                "sidebarResizeBounds": rect(controller.sidebarResizeHandle.frame), "sidebarResizeHidden": controller.sidebarResizeHandle.isHidden,
+                "sidebarResizeHitTarget": controller.root.hitTest(NSPoint(x: controller.sidebarResizeHandle.frame.midX, y: controller.sidebarResizeHandle.frame.midY)) === controller.sidebarResizeHandle,
+                "sidebarResizing": controller.sidebarResizing, "pageCornerRadius": controller.pageHost.layer?.cornerRadius ?? 0,
                 "sidebarControls": controls(in: controller.sidebar, controller: controller), "windowButtons": buttons
             ]
             let result = directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of: ".command.json", with: ".result.json"))

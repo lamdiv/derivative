@@ -110,7 +110,7 @@ import SwiftUI
         case "split.ratio": splitRatio = min(0.8, max(0.2, Double(values["ratio"] ?? "") ?? 0.5)); showActive(preserveSearch: true)
         case "preferences":
             if let value = values["theme"], ["system", "light", "dark"].contains(value) { store.state.preferences.theme = value }
-            if let value = values["sidebarSize"], ["compact", "comfortable", "wide"].contains(value) { store.state.preferences.sidebarSize = value }
+            if let value = values["sidebarSize"], ["compact", "comfortable", "wide"].contains(value) { store.state.preferences.sidebarSize = value; store.state.preferences.customSidebarWidth = nil }
             if let value = values["sidebarMode"], ["fixed", "hover", "hidden"].contains(value) {
                 if model.expanded { model.expandedSidebarMode = value }
                 else { store.state.preferences.sidebarMode = value; normalPinned = value == "fixed" }
@@ -150,6 +150,7 @@ import SwiftUI
         showActive()
     }
     func handleSidebarScroll(_ event: NSEvent, point: NSPoint) -> Bool {
+        guard !sidebarResizing else { return false }
         let phase: SpaceSwipePhase
         if !event.momentumPhase.isEmpty {
             phase = event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) ? .momentumEnded : .momentum
@@ -200,7 +201,7 @@ import SwiftUI
     }
     func animateSpaceSwipe(to id: String, direction: Int, offset: CGFloat) {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let distance = CGFloat(store.state.preferences.sidebarWidth)-16
+        let distance = sidebar.bounds.width-16
         swipeTransition += 1
         let generation = swipeTransition
         var transaction = Transaction(); transaction.disablesAnimations = true

@@ -26,9 +26,11 @@ The earlier Electron implementation is available in Git history. This branch con
 
 AppKit owns the main window. Loaded background browser views detach while retaining live page state; restored background tabs load only when selected. Closing a tab releases its browser. Split view attaches two live browsers with explicit frames, and focusing either pane selects the browser used by navigation and shortcuts.
 
-Search, settings, and the floating sidebar sit above the webpage host without resizing it. A normal window reserves space for the fixed sidebar and a small page inset. Maximized and fullscreen pages fill the viewport while the sidebar is unpinned. Hover reveal overlays the page; explicitly pinning the sidebar reserves its width and fits the webpage into the remaining area. Window controls align with the normal sidebar, while AppKit owns their fullscreen top-bar reveal.
+Search, settings, and the floating sidebar sit above the webpage host without resizing it. A normal window reserves space for the fixed sidebar and a small page inset. Maximized and fullscreen pages fill the viewport while the sidebar is unpinned. Hover reveal overlays the page; explicitly pinning the sidebar reserves its width and fits the webpage into the remaining area with an 8-point outer inset and rounded corners. Window controls align with the normal sidebar, while AppKit owns their fullscreen top-bar reveal.
 
 SwiftUI provides native glass on macOS 26+, with frosted and Reduce Transparency fallbacks. Decorative highlights and outgoing Space-transition snapshots do not receive pointer events. Space gestures retain their initial axis, commit at most one switch, and ignore momentum for further switching.
+
+The sidebar has a native right-edge resize target. Custom widths persist in preferences and are clamped between 220 points and two-thirds of the current content width. A deliberate inward overdrag collapses on release and resets the next reveal to the default width; ordinary minimum-width drags stay open. Hover auto-hide pauses while resizing, and Space transition distances use the actual laid-out width.
 
 ## Spaces and persistence
 

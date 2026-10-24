@@ -116,7 +116,7 @@ try {
   await send('preferences', { theme: 'dark' }); assert.equal((await snapshot()).dark, true);
   await send('expandedLayout', { expanded: true });
   await send('preferences', { sidebarMode: 'hidden' }); s = await snapshot(); assert.equal(s.sidebarMode, 'hidden'); assert.equal(s.state.preferences.sidebarMode, 'fixed'); assert.equal(s.sidebarVisible, false);
-  await send('preferences', { sidebarMode: 'fixed' }); s = await snapshot(); assert.equal(s.sidebarVisible, true); assert.equal(s.pageBounds.x, 336); assert.equal(s.pageBounds.width, s.rootBounds.width-336);
+  await send('preferences', { sidebarMode: 'fixed' }); s = await snapshot(); assert.equal(s.sidebarVisible, true); assert.equal(s.pageBounds.x, 336); assert.equal(s.pageBounds.width, s.rootBounds.width-344); assert.equal(s.pageBounds.y, 8); assert.equal(s.pageBounds.height, s.rootBounds.height-16);
   assert.ok(Math.abs(s.pageFrames[1].x+s.pageFrames[1].width-s.pageBounds.width) < 1, 'Both live split pages must fit beside the pinned sidebar');
   await send('expandedLayout', { expanded: false });
   await send('overlay.close'); await send('split.close');
