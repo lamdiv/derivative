@@ -53,6 +53,8 @@ Before distributing a custom engine, resolve the licensing requirements for the 
 
 Loaded background pages retain live form state while their views are detached. Restored tabs load lazily. Moving a tab to another Space reloads it under the destination profile. Metadata is written atomically. Restart restores URLs and organization, not unsaved forms or webpage navigation history. Split arrangements, recently closed tabs, and download history are session-only.
 
+## Data and profiles
+
 Existing browser data remains at `~/Library/Application Support/Derivative Native Prototype` for compatibility with earlier builds. This is an internal storage path, not the app name. Use `DERIVATIVE_NATIVE_USER_DATA=/absolute/path` for an isolated profile. Website profiles are direct-child `Space-<ID>` directories; metadata is `native-state.json`.
 
 Metadata version 2 assigns favorites to Spaces. Existing shared favorites are copied once into independent collections for each existing Space, preserving their order and rebinding open favorite tabs to the correct copy. The original metadata is backed up as `native-state-before-space-favorites.json` before conversion. New Spaces start with an empty collection. Removing a Space without open tabs also removes that Space's favorite collection. Do not open version 2 metadata with an older build that only understands version 1.
@@ -98,13 +100,9 @@ The interface has also been inspected using macOS accessibility and screenshots.
 
 ## Performance
 
-```sh
-npm run build
-python3 native/scripts/build.py
-node native/scripts/compare-memory.mjs
-```
+Restored background tabs load only when selected. Loaded background pages retain their live state while their views are detached. CEF still uses Chromium browser, renderer, and helper processes; memory use depends on the pages you open.
 
-The comparison uses one local page, fresh profiles, seven settled process-tree RSS samples, and the same sidebar width. Results are saved to ignored `test-results/native-memory.json`. Earlier builds measured 693.4 MiB native versus 854.8 MiB Electron, before the full feature port. That historical result is not a measurement of the current build or a guaranteed saving: shared memory may be counted twice, feature sets and engine patches differed, and RSS is not unique physical footprint.
+Historical comparisons with the earlier app are recorded in [verification notes](../docs/verification.md). They predate the current feature set and are not a current memory-saving claim. The retired comparison fixture is available in Git history.
 
 ## Source map
 
