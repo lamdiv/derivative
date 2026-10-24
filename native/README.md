@@ -64,6 +64,7 @@ Metadata version 2 assigns favorites to Spaces. Existing shared favorites are co
 Install the repository development dependencies (`npm ci`) for Chromium integration checks:
 
 ```sh
+node native/scripts/favicons.mjs
 node native/scripts/verify.mjs
 node native/scripts/tabs-profiles.mjs
 node native/scripts/sidebar-layout.mjs
@@ -77,6 +78,7 @@ node native/scripts/media.mjs --require-proprietary
 
 Run GUI fixtures sequentially. They use isolated profiles, a local HTTP server, and Chromium's test-only mock Keychain option. Automated windows stay in the background and ignore physical input. A private test-directory driver invokes native actions; no privileged interface is exposed to websites. Real page state is checked over per-page CDP connections.
 
+- `favicons.mjs`: declared PNG icon discovery after a root-icon 404, redirects and relative/base URLs, request deduplication, downsampling, and failure caching. Add `--live` to check the public Derivative website as well.
 - `verify.mjs`: rendering, input, navigation, live form restoration, absence of Node globals, and shutdown.
 - `media.mjs`: decoded video frames and seeking, AAC decoded samples, and fragmented MP4 MSE playback; reports capabilities to `test-results/native-media.json`. The default mode records missing proprietary codecs; `--require-proprietary` fails unless all checks pass. `--app /path/to/Derivative.app` selects an isolated candidate.
 - `tabs-profiles.mjs`: lazy restore, retained forms, hidden background pages, view destruction, per-Space storage isolation, popup ownership, restart, and multi-tab quit.
@@ -114,6 +116,7 @@ Historical comparisons with the earlier app are recorded in [verification notes]
 | `Sources/SidebarResize.swift` | Native edge dragging, width limits, and deliberate collapse |
 | `Sources/GlassSurface.swift` | Shared glass tint, highlights, rims, and accessibility fallback |
 | `Sources/AppearanceTheme.swift` | Coordinated pastel palettes and lightweight browser previews |
+| `Sources/FaviconLoader.swift` | Cached, bounded public favicon loading and HTML icon discovery |
 | `Sources/FavoriteTile.swift` | Favorite tiles, hover/active feedback, and movement menus |
 | `Sources/SidebarItemGlass.swift` | Sidebar item materials and accessibility fallback |
 | `Sources/SiteControls.swift` | Domain address bar, copy feedback, zoom, and tab sound controls |

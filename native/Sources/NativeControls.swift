@@ -89,18 +89,20 @@ struct SiteIcon: View {
     let url: String
     let title: String
     var size: CGFloat = 16
-    private var favicon: URL? {
-        guard var parts = URLComponents(string: url), ["http", "https"].contains(parts.scheme ?? "") else { return nil }
-        parts.path = "/favicon.ico"; parts.query = nil; parts.fragment = nil; parts.user = nil; parts.password = nil
-        return parts.url
-    }
+    @SidebarRowState<NSImage?> private var icon = nil
     var body: some View {
-        AsyncImage(url: favicon) { phase in
-            if let image = phase.image { image.resizable().scaledToFit() }
+        Group {
+            if let icon { Image(nsImage: icon).resizable().scaledToFit() }
             else { Text(String(title.prefix(1)).uppercased()).font(.system(size: size*0.7, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity).background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4)) }
         }.frame(width: size, height: size).accessibilityHidden(true)
+            .task(id: url) {
+                icon = nil
+                let loaded = await FaviconLoader.shared.image(for: url)
+                if !Task.isCancelled { icon = loaded }
+            }
     }
 }
+
 struct SidebarView: View {
     @ObservedObject var model: BrowserModel
     @SidebarRowState<Bool> private var newTabHovered = false

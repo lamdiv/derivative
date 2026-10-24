@@ -4,7 +4,7 @@ import { mkdtemp, rm, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
-import { command } from './driver.mjs';
+import { command, waitFor } from './driver.mjs';
 
 const server = createServer((req, res) => {
   res.setHeader('content-type', 'text/html');
@@ -56,7 +56,7 @@ try {
   await command(driver, 'window.minimize');
   assert.equal((await command(driver, 'snapshot')).windowMiniaturized, true, 'Yellow native button must minimize the window');
   await command(driver, 'window.restore');
-  assert.equal((await command(driver, 'snapshot')).windowMiniaturized, false);
+  await waitFor(async () => !(await command(driver, 'snapshot')).windowMiniaturized, 'The restored window must finish deminiaturizing');
   for (const [size, width] of [['compact', 252], ['comfortable', 288], ['wide', 320]]) {
     await command(driver, 'sidebarSize', { id: size });
     for (const [windowWidth, height] of [[700, 480], [1280, 840], [900, 600]]) {
