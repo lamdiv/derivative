@@ -13,14 +13,14 @@ private struct SidebarItemGlass: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         Group {
             if #available(macOS 26, *), !reduceTransparency {
-                content.glassEffect(.regular.tint(model.accent.opacity(selected ? 0.18 : hovered ? 0.09 : 0.025)), in: shape)
+                content.glassEffect(.regular.tint(model.accent.opacity(selected ? 0.20 : hovered ? 0.08 : 0.01)), in: shape)
             } else {
                 content.derivativeGlass(model, radius: radius, kind: .control)
                     .background(model.accent.opacity(selected ? 0.14 : hovered ? 0.07 : 0.02), in: shape)
             }
         }
         .overlay {
-            shape.strokeBorder(model.accent.opacity(selected ? 0.45 : 0), lineWidth: 1).allowsHitTesting(false)
+            shape.strokeBorder(model.accent.opacity(selected ? 0.30 : 0), lineWidth: 1).allowsHitTesting(false)
         }
         .animation(.easeOut(duration: 0.12), value: hovered)
     }

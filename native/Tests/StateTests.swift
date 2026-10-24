@@ -7,6 +7,14 @@ import Foundation
         let store = BrowserStore(directory: directory)
         assert(store.currentFavorites.map(\.name) == ["GitHub", "Derivative", "YouTube"])
         assert(store.currentFavorites[0].url == "https://github.com/lamdiv/derivative")
+        assert(PageZoom.next(100, direction: 1) == 110)
+        assert(PageZoom.next(125, direction: -1) == 110)
+        assert(PageZoom.next(300, direction: 1) == 300)
+        assert(PageZoom.next(25, direction: -1) == 25)
+        assert(SidebarSizing.width(100, available: 1200) == 220)
+        assert(SidebarSizing.width(5000, available: 1200) == 800)
+        assert(SidebarSizing.width(440, available: 1200) == 440)
+        store.state.preferences.customSidebarWidth = 440
         let personal = store.open("https://example.com/")!
         store.selectSpace("work")
         assert(store.active == nil && store.currentTabs.isEmpty)
@@ -17,6 +25,7 @@ import Foundation
         store.flush()
         let restored = BrowserStore(directory: directory)
         assert(restored.state.activeTabId == personal && restored.state.tabs.count == 2)
+        assert(restored.state.preferences.customSidebarWidth == 440)
         assert(restored.active?.title == "Personal" && restored.state.history.count == 1)
         restored.selectSpace("work"); assert(restored.active?.id == work)
         restored.remove(work); assert(restored.active == nil && restored.state.tabs.count == 1)

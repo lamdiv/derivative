@@ -74,6 +74,33 @@ try {
       near(snapshot.pageBounds.x, width + 16, 'Fixed sidebar reserves page space');
     }
   }
+  await command(driver, 'resize', { width: 1280, height: 840 });
+  let resized = await command(driver, 'sidebarDrag', { dx: 180 });
+  near(resized.sidebarBounds.width, 500, 'Dragging sets a custom width');
+  near(resized.pageBounds.x, 516, 'Page follows the custom sidebar width');
+  near(resized.sidebarResizeBounds.x, resized.sidebarBounds.x+498, 'Resize target tracks the edge');
+  assert.equal(resized.sidebarResizeHidden, false);
+  assert.equal(resized.sidebarResizeHitTarget, true, 'Edge clicks must reach the native resize handle');
+  resized = await command(driver, 'sidebarResize', { width: 2000 });
+  near(resized.sidebarBounds.width, 1280*2/3, 'Sidebar stops at two-thirds of the window');
+  resized = await command(driver, 'resize', { width: 700, height: 480 });
+  near(resized.sidebarBounds.width, 700*2/3, 'Shrinking the window reapplies the cap');
+  resized = await command(driver, 'sidebarResize', { width: 210 });
+  near(resized.sidebarBounds.width, 220, 'Small inward drag sticks at the minimum');
+  assert.equal(resized.sidebarVisible, true);
+  header(resized);
+  resized = await command(driver, 'sidebarResize', { width: 80, finished: false });
+  assert.equal(resized.sidebarVisible, true, 'Do not collapse until the drag is released');
+  near(resized.sidebarBounds.width, 220, 'Keep minimum width during overdrag');
+  resized = await command(driver, 'sidebarResize', { width: 80 });
+  assert.equal(resized.sidebarVisible, false, 'A deliberate inward overdrag collapses');
+  assert.equal(resized.sidebarResizeHidden, true);
+  resized = await command(driver, 'toggleSidebar');
+  near(resized.sidebarBounds.width, 288, 'Toggling after collapse restores the default width');
+  assert.equal(resized.sidebarVisible, true);
+  await command(driver, 'sidebarResize', { width: 400 });
+  resized = await command(driver, 'sidebarSize', { id: 'compact' });
+  near(resized.sidebarBounds.width, 252, 'Choosing a preset clears the custom width');
   const hidden = await command(driver, 'toggleSidebar');
   assert.equal(hidden.sidebarVisible, false);
   assert.ok(hidden.windowButtons.every(button => button.hidden));
@@ -82,6 +109,10 @@ try {
   header(await command(driver, 'relayoutTitlebar'));
   assert.equal(floating.sidebarVisible, true);
   assert.deepEqual(floating.pageBounds, hidden.pageBounds, 'Revealing the sidebar must not shift the page');
+  const floatingResize = await command(driver, 'sidebarResize', { width: 400 });
+  near(floatingResize.sidebarBounds.width, 400, 'Floating sidebar can also be resized');
+  assert.deepEqual(floatingResize.pageBounds, hidden.pageBounds, 'Floating resize must not shift the page');
+  await command(driver, 'sidebarSize', { id: 'compact' });
   const full = await command(driver, 'expandedLayout', { expanded: true });
   assert.equal(full.sidebarVisible, false);
   assert.ok(full.windowButtons.every(button => button.hidden), 'Fullscreen sidebar traffic lights stay hidden');
@@ -102,8 +133,10 @@ try {
     const pinned = await command(driver, 'toggleSidebar');
     assert.equal(pinned.sidebarVisible, true);
     near(pinned.pageBounds.x, width+16, 'Pinning the expanded sidebar must reserve its width');
-    near(pinned.pageBounds.width, pinned.rootBounds.width-width-16, 'Pinned page fills the remaining width');
-    near(pinned.pageBounds.height, pinned.rootBounds.height, 'Expanded page retains full height');
+    near(pinned.pageBounds.width, pinned.rootBounds.width-width-24, 'Pinned page fills the remaining width with an outer inset');
+    near(pinned.pageBounds.height, pinned.rootBounds.height-16, 'Pinned page has top and bottom padding');
+    near(pinned.pageBounds.y, 8, 'Pinned page top inset');
+    near(pinned.pageCornerRadius, 14, 'Pinned page has rounded corners');
     const unpinned = await command(driver, 'toggleSidebar');
     assert.deepEqual(unpinned.pageBounds, unpinned.rootBounds, 'Unpinning restores edge-to-edge content');
     const hovered = await command(driver, 'revealSidebar');

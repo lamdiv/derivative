@@ -35,6 +35,7 @@ struct BrowserDownload: Identifiable {
     @Published var downloads: [BrowserDownload] = []
     @Published var downloadsExpanded = false
     @Published var siteControlsOpen = false
+    @Published var pageZoom = 100
     @Published var settingsSection = "Appearance"
     @Published var newSpaceName = ""
     @Published var newSpaceColor = "blush"
@@ -54,9 +55,10 @@ struct BrowserDownload: Identifiable {
     var displayAddress: String { SavedBrowserState.displayAddress(address) }
     var canBack: Bool { store.active?.canBack ?? false }
     var canForward: Bool { store.active?.canForward ?? false }
-    var ink: Color { dark ? .white.opacity(0.9) : Color(red: 0.19, green: 0.15, blue: 0.25) }
+    var ink: Color { dark ? .white.opacity(0.9) : Color(red: 0.17, green: 0.16, blue: 0.20) }
     var palette: SpacePalette { .named(store.space.color) }
     var surface: Color { palette.surface(dark: dark) }
+    var sidebarSurface: Color { palette.sidebar(dark: dark) }
     var wash: Color { dark ? .white.opacity(0.10) : .black.opacity(0.055) }
     var accent: Color { palette.accent }
     init(store: BrowserStore) {

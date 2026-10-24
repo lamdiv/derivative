@@ -5,6 +5,7 @@ let browserShortcuts: [(String, String)] = [
     ("New tab", "⌘ T"), ("Edit address", "⌘ L"), ("Show / hide sidebar", "⌘ S"),
     ("Close tab", "⌘ W"), ("Reopen closed tab", "⇧ ⌘ T"), ("Pin / unpin tab", "⌘ D"),
     ("Copy page URL", "⇧ ⌘ C"), ("Reload", "⌘ R"), ("Reload without cache", "⇧ ⌘ R"),
+    ("Zoom in / out", "⌘ + / −"), ("Actual size", "⌘ 0"),
     ("Recent tabs", "⌃ Tab"), ("Previous recent tab", "⇧ ⌃ Tab"),
     ("Previous / next tab", "⌥ ⌘ ↑ / ↓"), ("Previous / next Space", "⌥ ⌘ ← / →"),
     ("Switch to Space 1–9", "⌃ 1–9"), ("Switch to tab 1–8 / last", "⌘ 1–8 / 9"),
@@ -68,7 +69,7 @@ struct SettingsView: View {
         HStack {
             Text(title).font(.system(size: 12, weight: .medium)); Spacer(minLength: 12)
             Picker(title, selection: Binding(get: { value }, set: { model.send("preferences", [key: $0]) })) {
-                ForEach(options, id: \.0) { id, label in Text(label).tag(id) }
+                ForEach(options, id: \.0) { id, label in Text(label).tag(id).disabled(id == "custom") }
             }.labelsHidden().frame(width: 165).controlSize(.small)
         }
     }
@@ -90,7 +91,7 @@ struct SettingsView: View {
                     ForEach(SpacePalette.all) { palette in
                         Button { model.send("space.color", id: model.store.space.id, ["color": palette.id]) } label: {
                             VStack(spacing: 7) {
-                                RoundedRectangle(cornerRadius: 10).fill(LinearGradient(colors: [palette.accent.opacity(0.95), palette.accent.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                RoundedRectangle(cornerRadius: 10).fill(LinearGradient(colors: [palette.sidebar(dark: model.dark), palette.accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
                                     .frame(height: 40)
                                     .overlay { if model.store.space.color == palette.id { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.black.opacity(0.65)) } }
                                 Text(palette.name).font(.system(size: 10, weight: .medium))
@@ -104,7 +105,12 @@ struct SettingsView: View {
             group("Sidebar") {
                 choice("Behavior", key: "sidebarMode", value: model.effectiveSidebarMode, options: [("fixed", "Always visible"), ("hover", "Float on hover"), ("hidden", "Hidden")])
                 Divider().opacity(0.2)
-                choice("Width", key: "sidebarSize", value: model.store.state.preferences.sidebarSize, options: [("compact", "Compact"), ("comfortable", "Comfortable"), ("wide", "Wide")])
+                choice("Width", key: "sidebarSize", value: model.store.state.preferences.customSidebarWidth == nil ? model.store.state.preferences.sidebarSize : "custom", options: (model.store.state.preferences.customSidebarWidth == nil ? [] : [("custom", "Custom")]) + [("compact", "Compact"), ("comfortable", "Comfortable"), ("wide", "Wide")])
+                if let width = model.store.state.preferences.customSidebarWidth {
+                    Text("Custom width: \(Int(width)) pt. Choose a preset to reset.").font(.system(size: 11)).foregroundStyle(.secondary)
+                } else {
+                    Text("Drag the sidebar’s right edge to resize.").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
             }
         }
     }

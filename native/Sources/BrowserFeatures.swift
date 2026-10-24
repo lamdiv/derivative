@@ -2,6 +2,13 @@ import AppKit
 import SwiftUI
 
 @MainActor extension BrowserController {
+    func setPageZoom(_ percent: Int) {
+        let value = min(300, max(25, percent))
+        DerivativeSetPageZoom(Int32(value)); model.pageZoom = value
+    }
+    @objc func zoomInPage() { setPageZoom(PageZoom.next(Int(DerivativePageZoom()), direction: 1)) }
+    @objc func zoomOutPage() { setPageZoom(PageZoom.next(Int(DerivativePageZoom()), direction: -1)) }
+    @objc func resetPageZoom() { setPageZoom(100) }
     @objc func resizeSplit(_ gesture: NSPanGestureRecognizer) {
         guard model.splitIDs.count == 2 else { return }
         let point = gesture.location(in: pageHost)
@@ -72,7 +79,7 @@ import SwiftUI
         case "site.controls":
             guard store.active != nil else { return }
             hideWork?.cancel(); hideWork = nil; model.downloadsExpanded = false; model.siteControlsOpen.toggle()
-        case "page.zoom": if let percent = Int(values["percent"] ?? "") { DerivativeSetPageZoom(Int32(clamping: percent)) }
+        case "page.zoom": if let percent = Int(values["percent"] ?? "") { setPageZoom(percent) }
         case "page.mute": DerivativeSetPageMuted(values["muted"] == "true")
         case "sidebar.toggle": toggleSidebar()
         case "favorite.edit":
@@ -110,7 +117,7 @@ import SwiftUI
         case "split.ratio": splitRatio = min(0.8, max(0.2, Double(values["ratio"] ?? "") ?? 0.5)); showActive(preserveSearch: true)
         case "preferences":
             if let value = values["theme"], ["system", "light", "dark"].contains(value) { store.state.preferences.theme = value }
-            if let value = values["sidebarSize"], ["compact", "comfortable", "wide"].contains(value) { store.state.preferences.sidebarSize = value }
+            if let value = values["sidebarSize"], ["compact", "comfortable", "wide"].contains(value) { store.state.preferences.sidebarSize = value; store.state.preferences.customSidebarWidth = nil }
             if let value = values["sidebarMode"], ["fixed", "hover", "hidden"].contains(value) {
                 if model.expanded { model.expandedSidebarMode = value }
                 else { store.state.preferences.sidebarMode = value; normalPinned = value == "fixed" }
@@ -150,6 +157,7 @@ import SwiftUI
         showActive()
     }
     func handleSidebarScroll(_ event: NSEvent, point: NSPoint) -> Bool {
+        guard !sidebarResizing else { return false }
         let phase: SpaceSwipePhase
         if !event.momentumPhase.isEmpty {
             phase = event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) ? .momentumEnded : .momentum
@@ -200,7 +208,7 @@ import SwiftUI
     }
     func animateSpaceSwipe(to id: String, direction: Int, offset: CGFloat) {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let distance = CGFloat(store.state.preferences.sidebarWidth)-16
+        let distance = sidebar.bounds.width-16
         swipeTransition += 1
         let generation = swipeTransition
         var transaction = Transaction(); transaction.disablesAnimations = true
@@ -290,6 +298,11 @@ import SwiftUI
         }
         if event.keyCode == 53 { model.dragging = nil; model.dropTarget = nil; if auxiliaryPanel != nil || searchPanel != nil { closeOverlay(); return true }; DerivativeStop(); return false }
         guard flags.contains(.command), !flags.contains(.control) else { return false }
+        if !flags.contains(.option) {
+            if key == "=" || key == "+" || event.keyCode == 69 { zoomInPage(); return true }
+            if key == "-" || event.keyCode == 78 { zoomOutPage(); return true }
+            if !flags.contains(.shift), key == "0" || event.keyCode == 82 { resetPageZoom(); return true }
+        }
         if flags.contains(.option) {
             guard !flags.contains(.shift) else { return false }
             switch event.keyCode { case 126: stepTab(-1); case 125: stepTab(1); case 123: stepSpace(-1); case 124: stepSpace(1); default: return false }; return true

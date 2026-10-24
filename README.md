@@ -24,7 +24,7 @@ Derivative (d) is a small, independent browser for macOS. Spaces for different p
 | :--- | :--- |
 | **Spaces** | Separate website sign-ins, colors, and favorites. Swipe to switch. |
 | **Your favorite places** | Up to 12 favorites per Space. Drag to arrange or move between Spaces. |
-| **A quieter sidebar** | Fixed, floating, or hidden. Three widths, with light and dark pastel themes. |
+| **A quieter sidebar** | Fixed, floating, or hidden. Drag to resize, with light and dark pastel themes. |
 | **Search, one shortcut away** | Press **⌘T**, type, and confirm. A new tab opens when you're ready. |
 | **Tabs that stay tidy** | Pin tabs, make folders, and pick up where you left off. |
 | **Two pages together** | Drag one tab onto another for a live, resizable split view. |

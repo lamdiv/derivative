@@ -93,6 +93,25 @@ try {
     await send('page.zoom', { percent: input });
     await waitFor(async () => (await snapshot()).pageZoom === expected, 'Zoom clamping/reset failed');
   }
+  stage = 'page zoom shortcuts';
+  for (const [characters, code, shift, expected] of [['=', 24, false, 110], ['+', 24, true, 125], ['-', 27, false, 110], ['0', 29, false, 100], ['', 69, false, 110], ['', 78, false, 100]]) {
+    const reply = await send('keyEvent', { characters, code, shift }); assert.equal(reply.keyHandled, true);
+    await waitFor(async () => (await snapshot()).pageZoom === expected, 'Native zoom shortcut '+characters);
+  }
+  assert.equal((await send('keyEvent', { characters: '=', code: 24, command: false })).keyHandled, false, 'Plain typing must not zoom');
+  assert.equal((await send('keyEvent', { characters: '=', code: 24, option: true })).keyHandled, false, 'Do not steal Option shortcuts');
+  // CDP dispatch goes straight to the renderer, bypassing CEF's browser callback.
+  // Exercise that callback with test-only native events and check real page scale.
+  async function chromiumZoom(code, shift, expected) {
+    assert.equal((await send('chromiumKey', { code, shift })).keyHandled, true);
+    await waitFor(async () => (await snapshot()).pageZoom === expected, 'CEF zoom callback '+code);
+  }
+  await chromiumZoom(187, false, 110);
+  await chromiumZoom(187, true, 125);
+  assert.ok(await first.evaluate(() => innerWidth) < initialViewport, 'Keyboard zoom must scale the actual webpage');
+  await chromiumZoom(189, false, 110);
+  await chromiumZoom(48, false, 100);
+  assert.equal((await send('chromiumKey', { code: 187, command: false })).keyHandled, false);
   await send('page.mute', { muted: 'true' }); await waitFor(async () => (await snapshot()).pageMuted, 'Mute did not reach Chromium');
   await send('selectTab', { id: 'two' }); assert.equal((await snapshot()).pageMuted, false, 'Mute must belong to the selected tab');
   assert.equal((await snapshot()).siteControlsOpen, false, 'Switching tabs dismisses site controls');
@@ -116,7 +135,7 @@ try {
   await send('preferences', { theme: 'dark' }); assert.equal((await snapshot()).dark, true);
   await send('expandedLayout', { expanded: true });
   await send('preferences', { sidebarMode: 'hidden' }); s = await snapshot(); assert.equal(s.sidebarMode, 'hidden'); assert.equal(s.state.preferences.sidebarMode, 'fixed'); assert.equal(s.sidebarVisible, false);
-  await send('preferences', { sidebarMode: 'fixed' }); s = await snapshot(); assert.equal(s.sidebarVisible, true); assert.equal(s.pageBounds.x, 336); assert.equal(s.pageBounds.width, s.rootBounds.width-336);
+  await send('preferences', { sidebarMode: 'fixed' }); s = await snapshot(); assert.equal(s.sidebarVisible, true); assert.equal(s.pageBounds.x, 336); assert.equal(s.pageBounds.width, s.rootBounds.width-344); assert.equal(s.pageBounds.y, 8); assert.equal(s.pageBounds.height, s.rootBounds.height-16);
   assert.ok(Math.abs(s.pageFrames[1].x+s.pageFrames[1].width-s.pageBounds.width) < 1, 'Both live split pages must fit beside the pinned sidebar');
   await send('expandedLayout', { expanded: false });
   await send('overlay.close'); await send('split.close');

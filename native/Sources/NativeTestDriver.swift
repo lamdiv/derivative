@@ -24,6 +24,7 @@ import Foundation
             try? FileManager.default.removeItem(at: file)
             let id = command["id"] as? String ?? ""
             var dropOperation = ""
+            var keyHandled = false
             switch command["action"] as? String {
             case "selectSpace": controller.selectSpace(id)
             case "selectTab": controller.selectTab(id)
@@ -57,6 +58,7 @@ import Foundation
             case "revealSidebar": controller.setRevealed(command["visible"] as? Bool ?? true)
             case "sidebarSize":
                 controller.store.state.preferences.sidebarSize = id
+                controller.store.state.preferences.customSidebarWidth = nil
                 controller.layout()
             case "fullscreenPhase":
                 let notice = Notification(name: NSWindow.didResizeNotification, object: controller.window)
@@ -75,10 +77,36 @@ import Foundation
                 controller.model.pinned = !controller.model.expanded
                 controller.revealed = false
                 controller.layout()
+            case "sidebarDrag":
+                let handle = controller.sidebarResizeHandle
+                guard !handle.isHidden else { break }
+                let start = handle.convert(NSPoint(x: handle.bounds.midX, y: handle.bounds.midY), to: nil)
+                let end = NSPoint(x: start.x+(command["dx"] as? Double ?? 0), y: start.y)
+                for (type, point) in [(NSEvent.EventType.leftMouseDown, start), (.leftMouseDragged, end), (.leftMouseUp, end)] {
+                    if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                        switch type {
+                        case .leftMouseDown: handle.mouseDown(with: event)
+                        case .leftMouseDragged: handle.mouseDragged(with: event)
+                        default: handle.mouseUp(with: event)
+                        }
+                    }
+                }
+            case "sidebarResize":
+                if !controller.sidebarResizing { controller.beginSidebarResize() }
+                controller.resizeSidebar(rawWidth: CGFloat(command["width"] as? Double ?? 288), finished: command["finished"] as? Bool ?? true)
             case "resize":
                 controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
                 controller.layout()
             case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, phase: SpaceSwipePhase(rawValue: command["phase"] as? String ?? "") ?? (command["began"] as? Bool == true ? .began : .unphased))
+            case "chromiumKey":
+                keyHandled = DerivativeTestZoomKey(Int32(command["code"] as? Int ?? 187), command["shift"] as? Bool ?? false, command["command"] as? Bool ?? true, command["option"] as? Bool ?? false)
+            case "keyEvent":
+                var flags: NSEvent.ModifierFlags = []
+                if command["command"] as? Bool ?? true { flags.insert(.command) }
+                if command["shift"] as? Bool ?? false { flags.insert(.shift) }
+                if command["option"] as? Bool ?? false { flags.insert(.option) }
+                let text = command["characters"] as? String ?? "="
+                if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.window.windowNumber, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: UInt16(command["code"] as? Int ?? 24)) { keyHandled = controller.handleKey(event) }
             case "shortcut": shortcut(Int32(command["key"] as? Int ?? 0))
             case "recent": controller.recent(command["step"] as? Int ?? 1)
             case "commitRecent": controller.commitRecent()
@@ -96,7 +124,7 @@ import Foundation
                 return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden, "hitTarget": hit === button]
             }
             let reply: [String: Any] = [
-                "displayAddress": controller.model.displayAddress, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
+                "displayAddress": controller.model.displayAddress, "keyHandled": keyHandled, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "visibleFavoriteIDs": controller.store.currentFavorites.map(\.id), "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.currentFavorites.count),
@@ -118,6 +146,9 @@ import Foundation
                 "searchBounds": rect(controller.searchPanel?.frame ?? .zero), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
                 "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": rect(bounds),
                 "rootBounds": rect(controller.root.bounds), "sidebarBounds": rect(controller.sidebar.frame),
+                "sidebarResizeBounds": rect(controller.sidebarResizeHandle.frame), "sidebarResizeHidden": controller.sidebarResizeHandle.isHidden,
+                "sidebarResizeHitTarget": controller.root.hitTest(NSPoint(x: controller.sidebarResizeHandle.frame.midX, y: controller.sidebarResizeHandle.frame.midY)) === controller.sidebarResizeHandle,
+                "sidebarResizing": controller.sidebarResizing, "pageCornerRadius": controller.pageHost.layer?.cornerRadius ?? 0,
                 "sidebarControls": controls(in: controller.sidebar, controller: controller), "windowButtons": buttons
             ]
             let result = directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of: ".command.json", with: ".result.json"))

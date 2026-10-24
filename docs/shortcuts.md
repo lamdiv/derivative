@@ -11,6 +11,8 @@ Derivative uses Arc-style defaults. This reference is also available in **Settin
 | ⌘⇧T | Reopen the last closed tab in this app session |
 | ⌘D | Pin / unpin the active tab |
 | ⌘R / ⌘⇧R | Reload / reload without cache |
+| ⌘+ / ⌘− | Zoom in / out (⌘= also zooms in) |
+| ⌘0 | Reset page zoom to 100% |
 | ⌘[ / ⌘] | Back / forward |
 | ⌃Tab / ⌃⇧Tab | Cycle recent tabs; release Control to switch |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next tab in sidebar order |
