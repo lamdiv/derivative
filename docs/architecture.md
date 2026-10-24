@@ -1,83 +1,62 @@
 # Architecture
 
-Derivative's macOS app uses SwiftUI controls, AppKit windows, and sandboxed Chromium Embedded Framework views. Website pages run separately from the trusted Swift interface, with no privileged JavaScript bridge.
+Derivative uses SwiftUI controls, AppKit windows, and sandbox-enabled Chromium Embedded Framework (CEF) views. Website pages run separately from the trusted Swift interface, with no privileged JavaScript bridge.
 
-## macOS implementation
+## Source map
 
-`native/Sources/BrowserState.swift` owns Codable metadata; `Organization.swift` implements favorite/folder/tab/Space operations. `BrowserUI.swift` composes the window, and `BrowserFeatures.swift` coordinates menus, keyboard/trackpad events, settings, downloads, and split panes. SwiftUI controls live in `NativeControls.swift` and `SettingsView.swift`.
-
-`Browser.mm` owns CEF browsers and request contexts. Each Space gets a separate persistent context. Inactive views detach while retaining live page state. Split view attaches two browsers and gives them explicit frames; selecting either pane changes the active browser for navigation and shortcuts. Search and settings are native sibling views above the webpage host and do not resize it. Moving a tab across Spaces waits for its old browser to close before opening it in the destination context; a cancelled before-unload dialog cancels the move.
-
-Metadata writes are debounced, serialized, and atomic. Website profiles are separate from Electron profiles. The existing native data path is retained for compatibility; see the [native guide](../native/README.md).
-
-Permission requests and mail/telephone links require native confirmation. Unsupported schemes are blocked. Certificates are validated. Download paths come from the native save flow; only explicit completed-download actions open files. Test launch flags enable a private local action driver and mock Keychain; neither is exposed to website JavaScript.
-
-## Electron implementation
-
-The Electron app uses React for the interface and `WebContentsView` for native Chromium pages. Its implementation details follow.
-
-## Project layout
-
-| Path | Responsibility |
+| Area | Responsibility |
 | --- | --- |
-| `electron/main.ts` | Window lifecycle, macOS menu, native controls, trusted IPC |
-| `electron/tabs/manager.ts` | Tab lifecycle, navigation, profiles, split views, permissions, downloads |
-| `electron/windows/chrome-layer.ts` | Floating sidebar and popup view composition |
-| `electron/windows/state-publisher.ts` | Per-renderer state snapshots and incremental updates |
-| `electron/preload.ts` | Isolated bridge for the trusted local UI |
-| `electron/storage/store.ts` | Validated restoration and serialized atomic metadata writes |
-| `shared/` | State/action types, navigation, shortcuts, suggestions, organization |
-| `src/` | React components, gesture handling, and styles |
-| `assets/brand.json` | Shared vector geometry for the app mark and generated icons |
-| `tests/` | Unit tests and local native integration fixtures |
+| `native/Sources/BrowserState.swift` | Validated Codable metadata, restoration, and atomic storage |
+| `native/Sources/Organization.swift` | Spaces, favorites, folders, tab placement, and swipe state |
+| `native/Sources/BrowserUI.swift` | AppKit window composition, webpage attachment, and overlays |
+| `native/Sources/BrowserFeatures.swift` | Actions, menus, shortcuts, downloads, and split coordination |
+| `native/Sources/NativeControls.swift` | SwiftUI sidebar, search, drag targets, and new-tab view |
+| `native/Sources/SettingsView.swift` | Settings, downloads, and supporting panels |
+| `native/Sources/GlassSurface.swift` | Native glass and older-system accessibility fallbacks |
+| `native/Sources/Browser.mm` | CEF lifecycle, contexts, navigation, permissions, and downloads |
+| `native/Sources/Bridge.h` | Narrow C interface between Swift and Chromium |
+| `native/Sources/Helper.cc` | Chromium subprocess entry point |
+| `native/Tests/` | State, engine package, and media fixtures |
+| `native/scripts/` | Build tools and isolated browser integration checks |
+| `assets/` | App logo and committed PNG/ICNS icon assets |
 
-## Native view composition
+The earlier Electron implementation is available in Git history. This branch contains the native app and its development tools.
 
-The root interface lives in a `BrowserWindow`. Loaded background website views remain alive but detached; restored background tabs load only when selected. Closing a tab closes its web contents. Split view attaches two website views at once, preserving both pages' input state.
+## Window and webpage layout
 
-A separate, preloaded transparent view renders trusted floating controls above websites. Modal panels cover the window; the floating sidebar covers only its own input region. Websites stay attached behind these controls. Exit transitions finish before the floating layer detaches, and reopening cancels stale detach timers.
+AppKit owns the main window. Loaded background browser views detach while retaining live page state; restored background tabs load only when selected. Closing a tab releases its browser. Split view attaches two live browsers with explicit frames, and focusing either pane selects the browser used by navigation and shortcuts.
 
-Normal windows use an 8px webpage inset. Fixed sidebar widths are Compact (252px), Comfortable (288px), and Wide (320px), plus 16px of frame spacing. Maximized and fullscreen pages fill the viewport with zero padding and square native corners. Revealing or pinning the expanded sidebar does not resize the website. The expanded sidebar reaches the top of the content area and retains 8px side/bottom spacing and 14px corners.
+Search, settings, and the floating sidebar sit above the webpage host without resizing it. A normal window reserves space for the fixed sidebar and a small page inset. Maximized and fullscreen pages fill the viewport; revealing the sidebar overlays the page. Window controls align with the normal sidebar, while AppKit owns their fullscreen top-bar reveal.
 
-In normal windows, native traffic lights align with the sidebar navigation row. In native fullscreen, macOS controls the top-edge reveal of the window controls. CSS does not claim to override macOS menu-bar or notch regions. Likewise, sidebar backdrop filtering operates within the trusted renderer rather than sampling a separate native website surface.
+SwiftUI provides native glass on macOS 26+, with frosted and Reduce Transparency fallbacks. Decorative highlights and outgoing Space-transition snapshots do not receive pointer events. Space gestures retain their initial axis, commit at most one switch, and ignore momentum for further switching.
+
+## Spaces and persistence
+
+Each Space has a persistent CEF request context for cookies and website storage. Switching Spaces preserves loaded pages. Moving a tab across Spaces waits for its old browser to close before opening it in the destination context; cancelling a before-unload dialog cancels the move.
+
+Favorites belong to a Space, with up to twelve per collection. Moving a favorite transfers its saved link; an already-open page remains in its original profile as a regular tab. Version 2 metadata converts earlier shared favorites into independent collections and backs up the original metadata before conversion.
+
+Metadata writes are debounced, serialized, and atomic. Tabs, folders, favorites, preferences, and shared history are stored in `native-state.json`. Website data lives in direct-child `Space-<ID>` directories. Open-tab search suggestions are scoped to the current Space. Metadata does not store website passwords or session tokens.
+
+The existing data directory is retained for compatibility. For isolated development data:
+
+```sh
+DERIVATIVE_NATIVE_USER_DATA=/absolute/path/to/test-profile \
+  native/build/Derivative.app/Contents/MacOS/Derivative
+```
+
+See [storage details](../native/README.md#data-and-profiles) for migration behavior. Split arrangements, recently closed tabs, and download history are session-only; unsaved forms and back/forward history survive ordinary tab switches but not app restarts.
 
 ## Trust boundaries
 
-Website views have Node integration disabled, context isolation, sandboxing, and web security enabled, with no privileged preload. The isolated browser bridge is exposed only to the local UI. IPC checks the exact UI URL and sender's main-frame identity, then validates action payloads.
+Website JavaScript has no Node runtime or privileged browser bridge. CEF handles websites in subprocesses; the native interface calls the narrow trusted C bridge. HTTP(S) popup links open tabs in the opener's profile. Mail and telephone links require native confirmation, unsupported schemes are blocked, and certificates are validated.
 
-Trusted UI navigation and popups are blocked. HTTP(S) website popups open as tabs. Mail and telephone links require native confirmation; other external schemes are blocked. Certificates are not bypassed. Supported website permissions ask through a native dialog, and unsupported permissions are denied. These boundaries do not replace a complete security audit.
+Supported website permissions require native confirmation; unsupported permissions are denied. Download paths come from native save dialogs. Only explicit completed-download actions open files. Browsing-data clearing also asks for confirmation. These controls do not replace a complete security audit.
 
-## Profiles and storage
+## Build and verification
 
-Browser metadata is stored in `app.getPath('userData')/browser-state.json`. Writes are debounced, serialized, and atomic. Invalid metadata falls back to a clean state; there is no recovery interface yet.
+The engine archive and checksums are pinned in `native/cef.lock.json`. The build verifies the framework, assembles the helper bundles, and signs the app locally. Custom-engine selection also validates the framework's identity. Codec source builds are described in the [build guide](../native/README.md#video-compatibility-and-engine-builds).
 
-Each Space has a separate persistent Electron session for cookies, local storage, IndexedDB, and cache:
+Integration fixtures create temporary profiles, use local webpages, and launch background windows that ignore physical input. A private test-directory driver invokes native actions; real webpage state is checked over CDP. Test launches use a mock Keychain. None of this test interface is exposed to website JavaScript.
 
-- Personal uses `persist:personal`.
-- Other Spaces use `persist:space-<Space ID>`.
-
-Switching Spaces preserves loaded pages. Moving a tab between Spaces reloads it in the destination profile. Closing tabs or quitting does not clear stored website data. History is currently shared across Spaces; open-tab search suggestions are scoped to the current Space.
-
-Metadata stores browsing URLs and history, but excludes website passwords and session tokens. Website session data remains in Electron's profile storage. User-initiated data clearing asks for confirmation.
-
-To use an isolated development profile:
-
-```sh
-DERIVATIVE_USER_DATA=/absolute/path/to/test-profile npm run dev
-```
-
-Native integration fixtures create and remove their own temporary profiles.
-
-## Interaction performance
-
-UI state crosses IPC as changed sections. Each trusted renderer keeps its own snapshot; the detached floating UI catches up when shown. Unchanged history is omitted from tab-switch updates, and private hover ownership does not broadcast UI state. Native attachment and border-radius calls are skipped when unchanged.
-
-After building, run the local stress fixture:
-
-```sh
-PERF_ASSERT=1 node tests/performance.mjs
-```
-
-It uses 500 restored tabs, two loaded pages, and 2,000 history entries to report action round-trip medians/p95, transmitted state counts, and idle broadcasts. Timing includes test automation and does not measure frame rate or website loading speed. Development logging also records window readiness and main-process tab switching.
-
-The [verification notes](verification.md) record measured results, test coverage, and unresolved native-suite timing failures. Neither these checks nor stored-cookie tests establish compatibility with every real sign-in provider or physical trackpad.
+See the [testing guide](../native/README.md#verify) for commands and [verification notes](verification.md) for tested behavior and remaining limits.
