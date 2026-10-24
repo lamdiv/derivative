@@ -23,7 +23,10 @@ private struct GlassSurface: ViewModifier {
                 // Text-heavy panels need a stable reading surface, independent
                 // of the website underneath. Keep glass around the soft rim.
                 if needsReadingSurface { shape.fill(surface.opacity(dark ? 0.96 : 0.97)).allowsHitTesting(false) }
-            }.glassEffect(.regular.tint(accent.opacity(kind == .sidebar ? 0.16 : 0.06)), in: shape)
+                if kind == .sidebar {
+                    shape.fill(LinearGradient(colors: [surface.opacity(0.92), surface.opacity(0.80)], startPoint: .topLeading, endPoint: .bottomTrailing)).allowsHitTesting(false)
+                }
+            }.glassEffect(.regular.tint(accent.opacity(kind == .sidebar ? 0.05 : 0.035)), in: shape)
         } else {
             fallback(content: content)
         }
@@ -37,12 +40,12 @@ private struct GlassSurface: ViewModifier {
                     shape.fill(.regularMaterial)
                     shape.fill(surface.opacity(dark ? 0.96 : 0.97))
                 } else if kind == .sidebar {
-                    shape.fill(surface.opacity(dark ? 0.62 : 0.72))
+                    shape.fill(surface.opacity(dark ? 0.88 : 0.92))
                 } else {
                     shape.fill(LinearGradient(colors: [.white.opacity(dark ? 0.075 : 0.5), .white.opacity(dark ? 0.025 : 0.23)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 }
                 if kind != .control {
-                    shape.fill(LinearGradient(colors: [accent.opacity(kind == .sidebar ? (dark ? 0.18 : 0.23) : 0.06), accent.opacity(kind == .sidebar ? 0.07 : 0.02)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    shape.fill(LinearGradient(colors: [accent.opacity(kind == .sidebar ? 0.08 : 0.04), accent.opacity(kind == .sidebar ? 0.025 : 0.01)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     if !reduceTransparency {
                         shape.fill(LinearGradient(colors: [.white.opacity(dark ? 0.045 : 0.16), .clear, .clear], startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
@@ -56,6 +59,6 @@ private struct GlassSurface: ViewModifier {
 }
 extension View {
     @MainActor func derivativeGlass(_ model: BrowserModel, radius: CGFloat, kind: GlassSurfaceKind, elevated: Bool = false) -> some View {
-        modifier(GlassSurface(dark: model.dark, accent: model.accent, surface: model.surface, radius: radius, kind: kind, elevated: elevated))
+        modifier(GlassSurface(dark: model.dark, accent: model.accent, surface: kind == .sidebar ? model.sidebarSurface : model.surface, radius: radius, kind: kind, elevated: elevated))
     }
 }

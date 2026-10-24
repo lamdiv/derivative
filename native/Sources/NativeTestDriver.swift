@@ -24,6 +24,7 @@ import Foundation
             try? FileManager.default.removeItem(at: file)
             let id = command["id"] as? String ?? ""
             var dropOperation = ""
+            var keyHandled = false
             switch command["action"] as? String {
             case "selectSpace": controller.selectSpace(id)
             case "selectTab": controller.selectTab(id)
@@ -97,6 +98,15 @@ import Foundation
                 controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
                 controller.layout()
             case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, phase: SpaceSwipePhase(rawValue: command["phase"] as? String ?? "") ?? (command["began"] as? Bool == true ? .began : .unphased))
+            case "chromiumKey":
+                keyHandled = DerivativeTestZoomKey(Int32(command["code"] as? Int ?? 187), command["shift"] as? Bool ?? false, command["command"] as? Bool ?? true, command["option"] as? Bool ?? false)
+            case "keyEvent":
+                var flags: NSEvent.ModifierFlags = []
+                if command["command"] as? Bool ?? true { flags.insert(.command) }
+                if command["shift"] as? Bool ?? false { flags.insert(.shift) }
+                if command["option"] as? Bool ?? false { flags.insert(.option) }
+                let text = command["characters"] as? String ?? "="
+                if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.window.windowNumber, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: UInt16(command["code"] as? Int ?? 24)) { keyHandled = controller.handleKey(event) }
             case "shortcut": shortcut(Int32(command["key"] as? Int ?? 0))
             case "recent": controller.recent(command["step"] as? Int ?? 1)
             case "commitRecent": controller.commitRecent()
@@ -114,7 +124,7 @@ import Foundation
                 return ["bounds": rect(controller.root.convert(button.bounds, from: button)), "hidden": button.isHidden, "hitTarget": hit === button]
             }
             let reply: [String: Any] = [
-                "displayAddress": controller.model.displayAddress, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
+                "displayAddress": controller.model.displayAddress, "keyHandled": keyHandled, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "visibleFavoriteIDs": controller.store.currentFavorites.map(\.id), "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.currentFavorites.count),

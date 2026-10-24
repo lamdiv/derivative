@@ -48,6 +48,12 @@ struct BrowserPreferences: Codable, Equatable {
     var searchEngine = "google"
     var sidebarWidth: CGFloat { CGFloat(customSidebarWidth ?? (sidebarSize == "compact" ? 252 : sidebarSize == "wide" ? 320 : 288)) }
 }
+enum PageZoom {
+    static let steps = [25, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300]
+    static func next(_ current: Int, direction: Int) -> Int {
+        direction > 0 ? (steps.first { $0 > current } ?? 300) : (steps.last { $0 < current } ?? 25)
+    }
+}
 enum SidebarSizing {
     static let minimum: CGFloat = 220
     static let collapseThreshold: CGFloat = 132

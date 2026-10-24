@@ -52,11 +52,11 @@ private struct AddressAction: View {
 }
 private struct SiteControlsPanel: View {
     @ObservedObject var model: BrowserModel
-    @ViewState<Int> private var zoom = 100
+    private var zoom: Int { model.pageZoom }
     @ViewState<Bool> private var muted = false
-    private let zoomSteps = [25, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300]
-    private func refresh() { zoom = Int(DerivativePageZoom()); muted = DerivativePageMuted() }
-    private func setZoom(_ value: Int) { zoom = value; model.send("page.zoom", ["percent": String(value)]) }
+    private let zoomSteps = PageZoom.steps
+    private func refresh() { model.pageZoom = Int(DerivativePageZoom()); muted = DerivativePageMuted() }
+    private func setZoom(_ value: Int) { model.send("page.zoom", ["percent": String(value)]) }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {

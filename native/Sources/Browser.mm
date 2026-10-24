@@ -259,6 +259,10 @@ class BrowserClient final : public CefClient, public WebContextMenus, public Cef
     if (event.type == KEYEVENT_KEYUP && code == 17) { DerivativeShortcut(1110); return false; }
     if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_CONTROL_DOWN) && !(flags & (EVENTFLAG_COMMAND_DOWN | EVENTFLAG_ALT_DOWN)) && code == 9) { DerivativeShortcut(flags & EVENTFLAG_SHIFT_DOWN ? 1101 : 1100); return true; }
     if (event.type == KEYEVENT_RAWKEYDOWN && (flags & EVENTFLAG_COMMAND_DOWN) && !(flags & EVENTFLAG_CONTROL_DOWN)) {
+      if (!(flags & EVENTFLAG_ALT_DOWN)) {
+        const int zoom = (code == 187 || code == 107) ? 1112 : (code == 189 || code == 109) ? 1113 : ((code == '0' || code == 96) && !(flags & EVENTFLAG_SHIFT_DOWN)) ? 1114 : 0;
+        if (zoom) { DerivativeShortcut(zoom); return true; }
+      }
       if ((flags & EVENTFLAG_ALT_DOWN) && !(flags & EVENTFLAG_SHIFT_DOWN) && code >= 37 && code <= 40) { DerivativeShortcut(1200+code-37); return true; }
       if ((flags & EVENTFLAG_SHIFT_DOWN) && !(flags & EVENTFLAG_ALT_DOWN)) {
         int action = code == 'T' ? 1102 : code == 'C' ? 1103 : code == 'R' ? 1104 : code == 219 ? 1105 : code == 221 ? 1106 : 0;
@@ -436,6 +440,16 @@ extern "C" bool DerivativeTestContextCommand(int command) {
 
 extern "C" bool DerivativeHasDevTools() { auto browser = Active(); return browser && browser->GetHost()->HasDevTools(); }
 extern "C" void DerivativeCloseDevTools() { if (auto browser = Active()) browser->GetHost()->CloseDevTools(); }
+
+// Test launches exercise the same browser-side callback used by native CEF keys.
+extern "C" bool DerivativeTestZoomKey(int key, bool shift, bool command, bool option) {
+  if (!getenv("DERIVATIVE_NATIVE_TEST_DIRECTORY")) return false;
+  auto browser = Active(); if (!browser) return false;
+  auto handler = browser->GetHost()->GetClient()->GetKeyboardHandler(); if (!handler) return false;
+  CefKeyEvent event; event.type = KEYEVENT_RAWKEYDOWN; event.windows_key_code = key;
+  event.modifiers = (shift ? EVENTFLAG_SHIFT_DOWN : 0) | (command ? EVENTFLAG_COMMAND_DOWN : 0) | (option ? EVENTFLAG_ALT_DOWN : 0);
+  bool shortcut = false; return handler->OnPreKeyEvent(browser, event, nullptr, &shortcut);
+}
 
 extern "C" int DerivativePageZoom() { auto browser = Active(); return browser ? std::lround(100*std::pow(1.2, browser->GetHost()->GetZoomLevel())) : 100; }
 extern "C" void DerivativeSetPageZoom(int percent) { if (auto browser = Active()) browser->GetHost()->SetZoomLevel(std::log(std::clamp(percent, 25, 300)/100.0)/std::log(1.2)); }

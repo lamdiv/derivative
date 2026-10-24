@@ -428,7 +428,7 @@ import QuartzCore
         let edit = NSMenuItem(); edit.submenu = NSMenu(title: "Edit")
         for (label, action, key) in [("Undo", "undo:", "z"), ("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] { edit.submenu?.addItem(withTitle: label, action: Selector(action), keyEquivalent: key) }
         menu.addItem(edit)
-        section("View", [("Toggle Sidebar", #selector(toggleSidebar), "s"), ("Pin Tab", #selector(pinActiveTab), "d"), ("Reload", #selector(reload), "r"), ("Back", #selector(back), "["), ("Forward", #selector(forward), "]")])
+        section("View", [("Toggle Sidebar", #selector(toggleSidebar), "s"), ("Pin Tab", #selector(pinActiveTab), "d"), ("Reload", #selector(reload), "r"), ("Zoom In", #selector(zoomInPage), "="), ("Zoom Out", #selector(zoomOutPage), "-"), ("Actual Size", #selector(resetPageZoom), "0"), ("Back", #selector(back), "["), ("Forward", #selector(forward), "]")])
         section("Window", [("Minimize", #selector(minimizeWindowControl), "m"), ("Zoom", #selector(zoomWindowControl), ""), ("Bring to Front", #selector(restoreWindowControl), "")])
         let fullscreen = NSMenuItem(title: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         fullscreen.target = window; fullscreen.keyEquivalentModifierMask = [.control, .command]
@@ -466,6 +466,9 @@ import QuartzCore
     case 1106: controller.stepTab(1)
     case 1110: controller.commitRecent()
     case 1111: controller.maximizeWindowControl()
+    case 1112: controller.zoomInPage()
+    case 1113: controller.zoomOutPage()
+    case 1114: controller.resetPageZoom()
     case 1200: controller.stepSpace(-1)
     case 1201: controller.stepTab(-1)
     case 1202: controller.stepSpace(1)

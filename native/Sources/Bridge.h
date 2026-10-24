@@ -13,6 +13,7 @@ void DerivativeBack(void);
 void DerivativeForward(void);
 void DerivativeReload(void);
 int DerivativePageZoom(void);
+bool DerivativeTestZoomKey(int key, bool shift, bool command, bool option);
 void DerivativeSetPageZoom(int percent);
 bool DerivativePageMuted(void);
 void DerivativeSetPageMuted(bool muted);
