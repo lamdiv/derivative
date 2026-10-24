@@ -168,7 +168,7 @@ import QuartzCore
         let bounds = root.bounds
         let inset: CGFloat = model.expanded ? 0 : 8
         let width = store.state.preferences.sidebarWidth
-        let offset: CGFloat = model.pinned && !model.expanded ? width+16 : inset
+        let offset: CGFloat = model.pinned ? width+16 : inset
         pageHost.frame = NSRect(x: offset, y: inset, width: max(1, bounds.width-offset-inset), height: max(1, bounds.height-inset*2))
         pageHost.layer?.cornerRadius = model.expanded ? 0 : 14
         if home != nil { home.frame = pageHost.bounds }

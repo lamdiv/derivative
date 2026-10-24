@@ -97,6 +97,18 @@ try {
   assert.ok(afterTopHover.windowButtons.every(button => button.hidden));
   near(fullReveal.sidebarBounds.y, 8, 'Fullscreen sidebar matches the bottom inset');
   assert.deepEqual(fullReveal.pageBounds, full.pageBounds, 'Fullscreen reveal must not resize the page');
+  for (const [sidebarSize, width] of [['compact', 252], ['comfortable', 288], ['wide', 320]]) {
+    await command(driver, 'preferences', { sidebarSize });
+    const pinned = await command(driver, 'toggleSidebar');
+    assert.equal(pinned.sidebarVisible, true);
+    near(pinned.pageBounds.x, width+16, 'Pinning the expanded sidebar must reserve its width');
+    near(pinned.pageBounds.width, pinned.rootBounds.width-width-16, 'Pinned page fills the remaining width');
+    near(pinned.pageBounds.height, pinned.rootBounds.height, 'Expanded page retains full height');
+    const unpinned = await command(driver, 'toggleSidebar');
+    assert.deepEqual(unpinned.pageBounds, unpinned.rootBounds, 'Unpinning restores edge-to-edge content');
+    const hovered = await command(driver, 'revealSidebar');
+    assert.deepEqual(hovered.pageBounds, hovered.rootBounds, 'Hover reveal remains an overlay');
+  }
   header(await command(driver, 'expandedLayout', { expanded: false }));
   await command(driver, 'preferences', { sidebarMode: 'fixed' });
   function nativeControlsOnly(snapshot) {

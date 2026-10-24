@@ -52,21 +52,40 @@ struct SavedBrowserState: Codable, Equatable {
     var spaces = [BrowserSpace(id: "personal", name: "Personal", icon: "camera.macro", color: "lavender"), BrowserSpace(id: "work", name: "Work", icon: "diamond", color: "mint"), BrowserSpace(id: "study", name: "Study", icon: "sun.max", color: "peach")]
     var tabs: [BrowserTab] = []
     var folders: [BrowserFolder] = []
-    var favorites = [
-        BrowserFavorite(id: "github", name: "GitHub", url: "https://github.com/"),
-        BrowserFavorite(id: "wikipedia", name: "Wikipedia", url: "https://wikipedia.org/"),
-        BrowserFavorite(id: "arena", name: "Are.na", url: "https://www.are.na/"),
-        BrowserFavorite(id: "youtube", name: "YouTube", url: "https://www.youtube.com/"),
-        BrowserFavorite(id: "reddit", name: "Reddit", url: "https://www.reddit.com/"),
-        BrowserFavorite(id: "figma", name: "Figma", url: "https://www.figma.com/"),
-        BrowserFavorite(id: "notion", name: "Notion", url: "https://www.notion.so/"),
-        BrowserFavorite(id: "mail", name: "Gmail", url: "https://mail.google.com/"),
-        BrowserFavorite(id: "calendar", name: "Calendar", url: "https://calendar.google.com/")
+    static let defaultFavorites = [
+        BrowserFavorite(id: "github", name: "GitHub", url: "https://github.com/lamdiv/derivative"),
+        BrowserFavorite(id: "derivative", name: "Derivative", url: "https://derivativebrowser.com/"),
+        BrowserFavorite(id: "youtube", name: "YouTube", url: "https://www.youtube.com/")
     ]
+    var favorites = Self.defaultFavorites
     var history: [BrowserHistory] = []
     var activeSpaceId = "personal"
     var activeTabId: String?
     var preferences = BrowserPreferences()
+
+    /// Replace only the complete, unedited starter collection. Custom collections stay intact.
+    @discardableResult mutating func updateLegacyDefaultFavorites() -> Bool {
+        let legacy = ["GitHub": "https://github.com/", "Wikipedia": "https://wikipedia.org/", "Are.na": "https://www.are.na/", "YouTube": "https://www.youtube.com/", "Reddit": "https://www.reddit.com/", "Figma": "https://www.figma.com/", "Notion": "https://www.notion.so/", "Gmail": "https://mail.google.com/", "Calendar": "https://calendar.google.com/"]
+        let collections = Dictionary(grouping: favorites, by: \.spaceId)
+        var changed = false
+        for (owner, collection) in collections {
+            guard collection.count == legacy.count, Set(collection.map(\.name)).count == legacy.count,
+                  collection.allSatisfy({ legacy[$0.name] == $0.url }) else { continue }
+            let replacements = Self.defaultFavorites.map { template -> BrowserFavorite in
+                var item = template; item.spaceId = owner
+                item.id = collection.first(where: { $0.name == template.name })?.id ?? UUID().uuidString
+                return item
+            }
+            let oldIDs = Set(collection.map(\.id))
+            for index in tabs.indices where tabs[index].favoriteId.map(oldIDs.contains) == true {
+                if !replacements.contains(where: { $0.id == tabs[index].favoriteId && $0.url == tabs[index].url }) {
+                    tabs[index].favoriteId = nil
+                }
+            }
+            favorites.removeAll { $0.spaceId == owner }; favorites.append(contentsOf: replacements); changed = true
+        }
+        return changed
+    }
 
     mutating func sanitize() {
         let validID: (String) -> Bool = { !$0.isEmpty && $0.count <= 80 && $0.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil }
@@ -149,6 +168,10 @@ struct SavedBrowserState: Codable, Equatable {
         if let data = try? Data(contentsOf: file), var saved = try? JSONDecoder().decode(SavedBrowserState.self, from: data), [1, 2].contains(saved.version) {
             if saved.favorites.contains(where: { $0.spaceId == nil }) {
                 let backup = directory.appendingPathComponent("native-state-before-space-favorites.json")
+                if !FileManager.default.fileExists(atPath: backup.path) { try? FileManager.default.copyItem(at: file, to: backup) }
+            }
+            if saved.updateLegacyDefaultFavorites() {
+                let backup = directory.appendingPathComponent("native-state-before-default-favorites.json")
                 if !FileManager.default.fileExists(atPath: backup.path) { try? FileManager.default.copyItem(at: file, to: backup) }
             }
             saved.sanitize()
