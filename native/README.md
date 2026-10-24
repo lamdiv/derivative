@@ -37,14 +37,14 @@ Before distributing a custom engine, resolve the licensing requirements for the 
 
 ## Everyday browsing
 
-- **Favorites:** up to twelve sites in balanced rows, with two tiles sharing a row equally. Add with the plus button, right-click to edit, copy, open, or remove, and drag to rearrange. An open favorite is highlighted in the grid.
+- **Favorites:** each Space has its own collection of up to twelve sites in balanced rows. Tiles have theme-aware hover and active states. Add with the plus button, right-click to edit, copy, move to another Space, or remove, and drag to rearrange. Drop a tile onto a Space icon to move it there. Moving a favorite keeps any live webpage in its original sign-in profile as a regular tab.
 - **Tabs and folders:** pin, duplicate, close, reopen, reorder, and move tabs. The menu beside the Space name creates folders. Drop tabs into a folder, Pinned, Today, or another Space. Right-click menus provide the same organization actions.
-- **Spaces:** each Space has separate persistent cookies and website storage. Create, rename, recolor, delete empty Spaces, and drag to reorder their icons. The Space name and tabs follow horizontal swipes, with paired outgoing/incoming slides; favorites and navigation stay stationary. Trackpad gestures retain their initial axis, switch at most one Space, and ignore momentum for switching. Edge hints overlay the sidebar without shifting its layout, and Reduce Motion skips large slides.
+- **Spaces:** each Space has separate persistent cookies and website storage. Create, rename, recolor, delete empty Spaces, and drag to reorder their icons. Favorites, the Space name, and tabs follow horizontal swipes with paired outgoing/incoming slides; navigation and footer controls stay stationary. Trackpad gestures retain their initial axis, switch at most one Space, and ignore momentum for switching. Edge hints overlay the sidebar without shifting its layout, and Reduce Motion skips large slides.
 - **Split view:** drop onto the middle of another tab to join two live pages. The top and bottom edges reorder instead. A joined sidebar row stays in the original tab section and uses website icons and titles. Click either page to focus it, drag the divider to resize, and right-click the joined row to separate or close panes.
 - **Address bar:** a compact domain label, copy-link feedback, and a site-controls popover with 25–300% page zoom, zoom reset, and per-tab muting. Click the domain to edit the complete URL.
-- **Search:** ⌘T opens a floating search panel; ⌘L edits the address. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
+- **Search:** ⌘T opens a floating search panel; ⌘L edits the address. The panel uses a readable glass-backed surface, theme-tinted selection, favicon tiles, and keyboard hints. Suggestions include tabs in the current Space, history, websites, search, and commands. Empty Spaces show history matches only after typing. Results have close controls. Typing in an empty Space opens the regular floating search panel and creates a tab only after confirmation.
 - **Sidebar:** fixed, floating on hover, or hidden, with compact, comfortable, and wide widths. The sidebar overlays the full page when maximized/fullscreen. Restoring the window restores its normal sidebar mode.
-- **Surfaces:** system Liquid Glass on macOS 26+ for the sidebar, search, settings, and popovers, with subtle Space tinting and quieter neutral canvas colors. macOS 14–15 retain a frosted visual-effect fallback; Reduce Transparency uses opaque surfaces. Small controls share their parent material rather than adding individual blur layers.
+- **Surfaces:** system Liquid Glass on macOS 26+ for the sidebar, search, settings, and popovers, with subtle Space tinting and quieter neutral canvas colors. macOS 14–15 retain a frosted visual-effect fallback; Reduce Transparency uses opaque surfaces. Sidebar tiles and tab rows use system glass surfaces with subtle hover and selected tinting.
 - **Settings:** separate Appearance, General, Spaces, Downloads, and Shortcuts sections. Visual Light/Dark/System cards and Lilac, Mint, Peach, Sky, and Rose swatches coordinate the glass tint and empty-page canvas. Spaces have inline color swatches; General groups search, restoration, and confirmed browsing-data clearing. Downloads include an empty state and shortcuts use readable keycaps.
 - **Downloads:** a floating panel above the footer button with live progress, cancellation, and completed-file Open / Show in Finder actions, plus native save dialogs.
 - **Keyboard:** Arc-style defaults, recent tabs across Spaces, reopen closed tabs, tab/Space cycling, numbered selection, hard reload, and URL copying. The complete reference is in Settings → Shortcuts.
@@ -54,6 +54,8 @@ Before distributing a custom engine, resolve the licensing requirements for the 
 Loaded background pages retain live form state while their views are detached. Restored tabs load lazily. Moving a tab to another Space reloads it under the destination profile. Metadata is written atomically. Restart restores URLs and organization, not unsaved forms or webpage navigation history. Split arrangements, recently closed tabs, and download history are session-only.
 
 Existing browser data remains at `~/Library/Application Support/Derivative Native Prototype` for compatibility with earlier builds. This is an internal storage path, not the app name. Use `DERIVATIVE_NATIVE_USER_DATA=/absolute/path` for an isolated profile. Website profiles are direct-child `Space-<ID>` directories; metadata is `native-state.json`.
+
+Metadata version 2 assigns favorites to Spaces. Existing shared favorites are copied once into independent collections for each existing Space, preserving their order and rebinding open favorite tabs to the correct copy. The original metadata is backed up as `native-state-before-space-favorites.json` before conversion. New Spaces start with an empty collection. Removing a Space without open tabs also removes that Space's favorite collection. Do not open version 2 metadata with an older build that only understands version 1.
 
 ## Verify
 
@@ -113,6 +115,8 @@ The comparison uses one local page, fresh profiles, seven settled process-tree R
 | `Sources/NativeControls.swift` | Sidebar, drag targets, favorites, search, and new-tab interface |
 | `Sources/GlassSurface.swift` | Shared glass tint, highlights, rims, and accessibility fallback |
 | `Sources/AppearanceTheme.swift` | Coordinated pastel palettes and lightweight browser previews |
+| `Sources/FavoriteTile.swift` | Favorite tiles, hover/active feedback, and movement menus |
+| `Sources/SidebarItemGlass.swift` | Sidebar item materials and accessibility fallback |
 | `Sources/SiteControls.swift` | Domain address bar, copy feedback, zoom, and tab sound controls |
 | `Sources/SettingsView.swift` | Settings, downloads, recent tabs, and page-error views |
 | `Sources/BrowserState.swift` | Validated metadata and atomic storage |

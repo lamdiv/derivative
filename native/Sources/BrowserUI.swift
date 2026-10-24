@@ -183,7 +183,9 @@ import QuartzCore
             let top = min(260, bounds.height*0.28)
             let count = min(5, nativeSuggestions(searchModel?.query ?? "", store: store).count)
             let height = min(bounds.height-top-24, CGFloat(count)*60+100)
-            panel.frame = NSRect(x: max(24, (bounds.width-720)/2), y: top, width: min(720, bounds.width-48), height: height)
+            let searchArea = pageHost.frame
+            let searchWidth = min(720, max(1, searchArea.width-48))
+            panel.frame = NSRect(x: searchArea.midX-searchWidth/2, y: top, width: searchWidth, height: height)
         }
         if let panel = auxiliaryPanel {
             scrim.frame = bounds
@@ -262,7 +264,7 @@ import QuartzCore
         store.remove(id); showActive(preserveSearch: searchPanel != nil)
     }
     func openFavorite(_ id: String) {
-        guard let favorite = store.state.favorites.first(where: { $0.id == id }) else { return }
+        guard let favorite = store.currentFavorites.first(where: { $0.id == id }) else { return }
         if let index = store.state.tabs.firstIndex(where: { $0.spaceId == store.state.activeSpaceId && ($0.favoriteId == id || $0.url == favorite.url) }) {
             store.state.tabs[index].favoriteId = id; selectTab(store.state.tabs[index].id)
         } else { store.open(favorite.url, favoriteId: id); showActive() }

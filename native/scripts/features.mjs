@@ -59,6 +59,17 @@ try {
   await send('closeTab', { id: copiedID }); await waitFor(async () => !(await snapshot()).state.tabs.some(t => t.id === copiedID), 'Close copied favorite tab');
   await send('selectTab', { id: 'one' });
   const added = await send('drop', { token: 'tab:two', kind: 'favoriteGrid' }); assert.equal(added.dropOperation, 'copy'); assert.equal(added.state.favorites.length, 3);
+  await send('selectSpace', { id: 'work' }); assert.equal((await snapshot()).visibleFavoriteIDs.length, 0, 'New favorite lists must be Space-local');
+  await send('favorite.save', { name: 'Work only', url: address+'/work' });
+  s = await snapshot(); const workFavorite = s.visibleFavoriteIDs[0]; assert.equal(s.visibleFavoriteIDs.length, 1);
+  await send('selectSpace', { id: 'personal' }); assert.equal((await snapshot()).visibleFavoriteIDs.length, 3);
+  s = await send('drop', { token: 'favorite:'+favorite, kind: 'space', id: 'work' });
+  assert.equal(s.dropOperation, 'move'); assert.equal(s.visibleFavoriteIDs.includes(favorite), false);
+  assert.equal(s.state.activeSpaceId, 'personal', 'Moving a favorite must not change the active profile');
+  await send('selectSpace', { id: 'work' }); s = await snapshot(); assert.deepEqual(new Set(s.visibleFavoriteIDs), new Set([workFavorite, favorite]));
+  await send('favorite.move', { id: favorite, spaceId: 'personal' });
+  await send('favorite.delete', { id: workFavorite });
+  await send('selectSpace', { id: 'personal' }); assert.equal((await snapshot()).visibleFavoriteIDs.length, 3);
   const beforeDownloads = await snapshot();
   await send('downloads.toggle');
   const expandedDownloads = await snapshot();
@@ -69,7 +80,7 @@ try {
   await send('folder.create', { name: 'Reading' });
   const folder = (await snapshot()).state.folders[0].id;
   await send('tab.place', { id: 'one', folderId: folder, pinned: 'true' });
-  s = await snapshot(); assert.equal(s.state.tabs.find(t => t.id === 'one').folderId, folder); assert.equal(s.loadedPages, 1);
+  s = await snapshot(); assert.equal(s.state.tabs.find(t => t.id === 'one').folderId, folder); assert.equal(s.loadedPages, 2, 'Visiting Work loads its page without recreating the Personal page');
   stage = 'address bar and site controls';
   const controlsBefore = await snapshot(); const initialViewport = await first.evaluate(() => innerWidth);
   assert.equal(controlsBefore.displayAddress, new URL(address).host);

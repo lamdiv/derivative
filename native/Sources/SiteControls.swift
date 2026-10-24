@@ -6,14 +6,18 @@ private typealias ViewState<Value> = SwiftUI.State<Value>
 struct SidebarAddressBar: View {
     @ObservedObject var model: BrowserModel
     @ViewState<String?> private var copiedURL = nil
+    @ViewState<Bool> private var addressHovered = false
     var body: some View {
         HStack(spacing: 1) {
             Button(action: model.search) {
-                Text(model.displayAddress).font(.system(size: 12, weight: .medium))
-                    .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-                    .padding(.leading, 12).contentShape(Rectangle())
-            }.accessibilityLabel("Edit address").help(model.address+" · ⌘L")
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(model.displayAddress).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }.padding(.horizontal, 11).frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                    .background(addressHovered ? model.wash : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+            }.buttonStyle(SidebarImmediateButtonStyle()).onHover { addressHovered = $0 }
+                .accessibilityLabel("Edit address").help(model.address+" · ⌘L")
             AddressAction(icon: copiedURL == model.address ? "checkmark" : "link", title: copiedURL == model.address ? "Link copied" : "Copy link", wash: model.wash) {
                 model.send("copy"); copiedURL = model.address
             }
@@ -22,7 +26,7 @@ struct SidebarAddressBar: View {
             }.popover(isPresented: $model.siteControlsOpen, arrowEdge: .trailing) {
                 SiteControlsPanel(model: model)
             }
-        }.padding(.trailing, 5).derivativeGlass(model, radius: 11, kind: .control)
+        }.padding(.trailing, 5).derivativeGlass(model, radius: 12, kind: .control)
             .task(id: copiedURL) {
                 guard copiedURL != nil else { return }
                 do { try await Task.sleep(for: .seconds(1.5)) } catch { return }

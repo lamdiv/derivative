@@ -83,6 +83,7 @@ import SwiftUI
         case "favorite.save": store.saveFavorite(id: id.isEmpty ? nil : id, name: values["name"] ?? "", input: values["url"] ?? "")
         case "favorite.delete": store.deleteFavorite(id)
         case "favorite.reorder": store.reorderFavorite(id, before: values["beforeId"])
+        case "favorite.move": _ = store.moveFavorite(id, to: values["spaceId"] ?? "")
         case "folder.create":
             if let name = values["name"] { store.createFolder(name: name) }
             else { prompt("New folder", fields: [("Folder name", "")], confirm: "Create") { [weak self] fields in self?.store.createFolder(name: fields[0]) } }

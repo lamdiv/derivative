@@ -15,7 +15,7 @@ struct NativeSplitGroup: View {
                         .onHover { inside in if inside { hoveredID = id } else if hoveredID == id { hoveredID = nil } }
                 }
             }
-        }.background(model.wash, in: RoundedRectangle(cornerRadius: 10))
+        }.sidebarItemGlass(model, radius: 10)
             .contextMenu {
                 Button("Separate tabs") { model.send("split.close") }
                 ForEach(model.splitIDs, id: \.self) { id in if let tab = model.store.state.tabs.first(where: { $0.id == id }) { Button("Close \(tab.title)") { model.closeTab(id) } } }

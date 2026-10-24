@@ -2,11 +2,10 @@ import SwiftUI
 
 private typealias GlassEnvironment<Value> = SwiftUI.Environment<Value>
 
-enum GlassSurfaceKind { case sidebar, panel, control }
+enum GlassSurfaceKind { case sidebar, panel, search, control }
 
 /// Use system Liquid Glass for navigation surfaces on macOS 26+.
-/// Older systems retain a frosted treatment. Tiles share the enclosing material
-/// instead of paying for a separate backdrop effect on every control.
+/// Older systems retain a frosted treatment and opaque accessibility fallback.
 private struct GlassSurface: ViewModifier {
     var dark: Bool
     var accent: Color
@@ -16,10 +15,15 @@ private struct GlassSurface: ViewModifier {
     var elevated: Bool
     @GlassEnvironment(\.accessibilityReduceTransparency) private var reduceTransparency
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
+    private var needsReadingSurface: Bool { kind == .panel || kind == .search }
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 26, *), !reduceTransparency, kind != .control {
-            content.glassEffect(.regular.tint(accent.opacity(kind == .sidebar ? 0.16 : 0.06)), in: shape)
+            content.background {
+                // Text-heavy panels need a stable reading surface, independent
+                // of the website underneath. Keep glass around the soft rim.
+                if needsReadingSurface { shape.fill(surface.opacity(dark ? 0.96 : 0.97)).allowsHitTesting(false) }
+            }.glassEffect(.regular.tint(accent.opacity(kind == .sidebar ? 0.16 : 0.06)), in: shape)
         } else {
             fallback(content: content)
         }
@@ -29,9 +33,9 @@ private struct GlassSurface: ViewModifier {
             ZStack {
                 if reduceTransparency {
                     shape.fill(kind == .control ? (dark ? Color.white.opacity(0.09) : Color.black.opacity(0.04)) : surface)
-                } else if kind == .panel {
+                } else if needsReadingSurface {
                     shape.fill(.regularMaterial)
-                    shape.fill(surface.opacity(dark ? 0.72 : 0.66))
+                    shape.fill(surface.opacity(dark ? 0.96 : 0.97))
                 } else if kind == .sidebar {
                     shape.fill(surface.opacity(dark ? 0.62 : 0.72))
                 } else {

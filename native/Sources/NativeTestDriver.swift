@@ -99,7 +99,7 @@ import Foundation
                 "displayAddress": controller.model.displayAddress, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
-                "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
+                "visibleFavoriteIDs": controller.store.currentFavorites.map(\.id), "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.currentFavorites.count),
                 "systemControlsHidden": [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { controller.window.standardWindowButton($0)?.isHidden },
                 "fullscreenTransitioning": controller.fullscreenTransitioning,
                 "windowFullscreen": controller.window.styleMask.contains(.fullScreen), "rootHidden": controller.root.isHidden, "rootAttached": controller.root.window === controller.window,

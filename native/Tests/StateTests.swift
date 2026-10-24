@@ -41,12 +41,41 @@ import Foundation
         restored.placeTab(personal, space: "missing", pinned: true)
         assert(restored.state == before)
         restored.saveFavorite(name: "Test", input: "example.org")
-        let favorite = restored.state.favorites.last!.id
-        restored.reorderFavorite(favorite, before: restored.state.favorites.first!.id)
-        assert(restored.state.favorites.first!.id == favorite)
+        let favorite = restored.currentFavorites.last!.id
+        restored.reorderFavorite(favorite, before: restored.currentFavorites.first!.id)
+        assert(restored.currentFavorites.first!.id == favorite)
         restored.saveFavorite(id: favorite, name: "Updated", input: "https://example.org/new")
-        assert(restored.state.favorites.first!.name == "Updated")
+        assert(restored.currentFavorites.first!.name == "Updated")
         restored.deleteFavorite(favorite); assert(!restored.state.favorites.contains { $0.id == favorite })
+        let legacyDirectory = directory.appendingPathComponent("legacy")
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
+        var legacy = SavedBrowserState(); legacy.version = 1
+        legacy.favorites = [BrowserFavorite(id: "shared", name: "Shared", url: "https://example.org/")]
+        legacy.tabs = [BrowserTab(id: "p", spaceId: "personal", url: "https://example.org/", title: "P", favoriteId: "shared", lastActive: 1), BrowserTab(id: "w", spaceId: "work", url: "https://example.org/", title: "W", favoriteId: "shared", lastActive: 1)]
+        let original = try JSONEncoder().encode(legacy)
+        try original.write(to: legacyDirectory.appendingPathComponent("native-state.json"))
+        let migrated = BrowserStore(directory: legacyDirectory)
+        assert(migrated.state.version == 2 && migrated.state.favorites.count == 3)
+        let backup = try Data(contentsOf: legacyDirectory.appendingPathComponent("native-state-before-space-favorites.json"))
+        assert(backup == original)
+        let stable = migrated.state; migrated.state.sanitize(); assert(migrated.state == stable)
+        let personalFavorite = migrated.currentFavorites[0].id
+        let workFavorite = migrated.favorites(in: "work")[0].id
+        assert(personalFavorite != workFavorite && migrated.state.tabs.first { $0.id == "w" }?.favoriteId == workFavorite)
+        migrated.saveFavorite(id: personalFavorite, name: "Personal only", input: "https://example.org/personal")
+        assert(migrated.favorites(in: "work")[0].name == "Shared")
+        let beforeCrossSpaceReorder = migrated.state
+        migrated.reorderFavorite(personalFavorite, before: workFavorite); assert(migrated.state == beforeCrossSpaceReorder)
+        assert(migrated.moveFavorite(personalFavorite, to: "work"))
+        assert(migrated.currentFavorites.isEmpty && migrated.favorites(in: "work").count == 2)
+        assert(migrated.state.tabs.first { $0.id == "p" }?.spaceId == "personal" && migrated.state.tabs.first { $0.id == "p" }?.favoriteId == nil)
+        migrated.selectSpace("work")
+        for index in 0..<15 { migrated.saveFavorite(name: "Item \(index)", input: "https://example.org/\(index)") }
+        assert(migrated.currentFavorites.count == 12)
+        assert(!migrated.moveFavorite(migrated.favorites(in: "study")[0].id, to: "work"))
+        migrated.flush()
+        let migratedAgain = BrowserStore(directory: legacyDirectory)
+        assert(migratedAgain.currentFavorites == migrated.currentFavorites && migratedAgain.state.favorites.count == 13)
         restored.createSpace(name: "Art", color: "blush", icon: "✿")
         let art = restored.state.spaces.last!.id
         restored.reorderSpace(art, before: "personal"); assert(restored.state.spaces.first!.id == art)
@@ -93,6 +122,6 @@ import Foundation
         assert(SavedBrowserState.displayAddress("https://www.github.com/lamdiv/derivative?q=private#top") == "github.com")
         assert(SavedBrowserState.displayAddress("http://localhost:3000/path") == "localhost:3000")
         assert(SavedBrowserState.displayAddress("https://user:password@example.org/path") == "example.org")
-        print("PASS: native tab/Space selection, restoration, isolated empty Spaces, URL validation, sanitization, and atomic metadata.")
+        print("PASS: native tab/Space selection, Space-local favorite migration and moves, restoration, isolated empty Spaces, URL validation, sanitization, and atomic metadata.")
     }
 }
