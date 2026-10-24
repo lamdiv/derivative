@@ -6,6 +6,21 @@ import QuartzCore
 @MainActor final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
+@MainActor final class SidebarGlassView: NSView {
+    override var isFlipped: Bool { true }
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        // SwiftUI owns the native glass on newer systems. Avoid a second blur
+        // behind it; the older fallback still needs an AppKit backdrop.
+        if #unavailable(macOS 26) {
+            let backdrop = NSVisualEffectView(frame: bounds)
+            backdrop.material = .sidebar; backdrop.blendingMode = .withinWindow; backdrop.state = .followsWindowActiveState
+            backdrop.autoresizingMask = [.width, .height]; addSubview(backdrop)
+        }
+        wantsLayer = true; layer?.cornerRadius = 14; layer?.masksToBounds = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+}
 @MainActor final class BrowserWindow: NSWindow {
     override var canBecomeKey: Bool { ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_AUTOMATED"] != "1" }
     override var canBecomeMain: Bool { canBecomeKey }
@@ -16,7 +31,7 @@ import QuartzCore
     let window: NSWindow
     let root = FlippedView()
     let pageHost = FlippedView()
-    let sidebar = FlippedView()
+    let sidebar = SidebarGlassView(frame: .zero)
     let sidebarContent: NSHostingView<SidebarView>
     let scrim = FlippedView()
     var windowButtons: [NSButton] = []
@@ -44,6 +59,8 @@ import QuartzCore
     var pendingMoves: [String: [String: String]] = [:]
     var swipe = SpaceSwipe()
     var swipeReset: DispatchWorkItem?
+    var swipeCapture: (image: NSImage, origin: CGPoint)?
+    var swipeTransition = 0
     var splitRatio = 0.5
     let splitDivider = SplitDivider()
     var pageEnteredFullscreen = false
@@ -122,12 +139,12 @@ import QuartzCore
                 if event.type == .mouseMoved && NSEvent.pressedMouseButtons & 1 == 0 { self.model.dragging = nil; self.model.dropTarget = nil }
                 if event.type == .leftMouseUp { DispatchQueue.main.async { self.model.dragging = nil; self.model.dropTarget = nil } }
                 let point = self.root.convert(event.locationInWindow, from: nil)
-                if event.type == .scrollWheel, !self.sidebar.isHidden, self.sidebar.frame.contains(point), self.auxiliaryPanel == nil, self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
-                    consumed = self.handleSwipe(dx: -event.scrollingDeltaX, dy: -event.scrollingDeltaY, time: event.timestamp, began: event.phase.contains(.began)); if consumed { return }
+                if event.type == .scrollWheel {
+                    consumed = self.handleSidebarScroll(event, point: point); if consumed { return }
                 }
                 if event.type == .leftMouseDown, let panel = self.auxiliaryPanel, !panel.frame.contains(point) { self.closeOverlay(); consumed = true; return }
                 if event.type == .leftMouseDown && self.searchPanel != nil && !self.searchPanel!.frame.contains(point) { self.closeSearch(); consumed = true; return }
-                if event.type == .mouseMoved && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
+                if event.type == .mouseMoved && !self.swipe.tracking && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
                     if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
                     else if point.x > self.store.state.preferences.sidebarWidth+24 { self.scheduleHide() }
                     else { self.hideWork?.cancel(); self.hideWork = nil; if self.sidebarHiding { self.setRevealed(true) } }
@@ -166,7 +183,9 @@ import QuartzCore
             let top = min(260, bounds.height*0.28)
             let count = min(5, nativeSuggestions(searchModel?.query ?? "", store: store).count)
             let height = min(bounds.height-top-24, CGFloat(count)*60+100)
-            panel.frame = NSRect(x: max(24, (bounds.width-720)/2), y: top, width: min(720, bounds.width-48), height: height)
+            let searchArea = pageHost.frame
+            let searchWidth = min(720, max(1, searchArea.width-48))
+            panel.frame = NSRect(x: searchArea.midX-searchWidth/2, y: top, width: searchWidth, height: height)
         }
         if let panel = auxiliaryPanel {
             scrim.frame = bounds
@@ -231,7 +250,13 @@ import QuartzCore
         model.error = ""; layout()
     }
     func selectTab(_ id: String) { store.select(id); showActive() }
-    func selectSpace(_ id: String) { store.selectSpace(id); homeSearch.query = ""; homeSearch.selected = 0; showActive() }
+    func selectSpace(_ id: String, duringSwipe: Bool = false) {
+        if !duringSwipe {
+            swipeTransition += 1; swipeCapture = nil; swipe = SpaceSwipe(); swipeReset?.cancel()
+            model.swipeOutgoing = nil; model.swipeOffset = 0; model.swipeEdge = nil
+        }
+        store.selectSpace(id); applyPreferences(); homeSearch.query = ""; homeSearch.selected = 0; showActive()
+    }
     func closeTab(_ id: String) { id.withCString { DerivativeClosePage($0) } }
     func tabClosed(_ id: String) {
         if let placement = pendingMoves.removeValue(forKey: id) { placeTab(id, values: placement, afterClose: true); return }
@@ -239,7 +264,7 @@ import QuartzCore
         store.remove(id); showActive(preserveSearch: searchPanel != nil)
     }
     func openFavorite(_ id: String) {
-        guard let favorite = store.state.favorites.first(where: { $0.id == id }) else { return }
+        guard let favorite = store.currentFavorites.first(where: { $0.id == id }) else { return }
         if let index = store.state.tabs.firstIndex(where: { $0.spaceId == store.state.activeSpaceId && ($0.favoriteId == id || $0.url == favorite.url) }) {
             store.state.tabs[index].favoriteId = id; selectTab(store.state.tabs[index].id)
         } else { store.open(favorite.url, favoriteId: id); showActive() }

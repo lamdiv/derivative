@@ -31,7 +31,7 @@ import SwiftUI
         let theme = store.state.preferences.theme
         window.appearance = theme == "system" ? nil : NSAppearance(named: theme == "dark" ? .darkAqua : .aqua)
         model.dark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        window.backgroundColor = model.dark ? NSColor(red: 0.13, green: 0.11, blue: 0.17, alpha: 1) : NSColor(red: 0.94, green: 0.92, blue: 0.97, alpha: 1)
+        window.backgroundColor = NSColor(model.surface)
     }
     func closeOverlay(focus: Bool = true) {
         model.siteControlsOpen = false
@@ -83,6 +83,7 @@ import SwiftUI
         case "favorite.save": store.saveFavorite(id: id.isEmpty ? nil : id, name: values["name"] ?? "", input: values["url"] ?? "")
         case "favorite.delete": store.deleteFavorite(id)
         case "favorite.reorder": store.reorderFavorite(id, before: values["beforeId"])
+        case "favorite.move": _ = store.moveFavorite(id, to: values["spaceId"] ?? "")
         case "folder.create":
             if let name = values["name"] { store.createFolder(name: name) }
             else { prompt("New folder", fields: [("Folder name", "")], confirm: "Create") { [weak self] fields in self?.store.createFolder(name: fields[0]) } }
@@ -99,7 +100,7 @@ import SwiftUI
             else if let space = store.state.spaces.first(where: { $0.id == id }) { prompt("Rename Space", fields: [("Space name", space.name)]) { [weak self] in self?.store.renameSpace(id, name: $0[0]) } }
         case "space.create": store.createSpace(name: values["name"] ?? "", color: values["color"] ?? "lavender", icon: values["icon"] ?? "✳")
         case "space.delete": store.deleteSpace(id); showActive()
-        case "space.color": if let index = store.state.spaces.firstIndex(where: { $0.id == id }), let color = values["color"], ["lavender", "mint", "peach", "blue", "blush"].contains(color) { store.state.spaces[index].color = color; store.persist() }
+        case "space.color": if let index = store.state.spaces.firstIndex(where: { $0.id == id }), let color = values["color"], ["lavender", "mint", "peach", "blue", "blush"].contains(color) { store.state.spaces[index].color = color; store.persist(); applyPreferences() }
         case "space.reorder": store.reorderSpace(id, before: values["beforeId"] ?? "")
         case "split.open":
             guard let base = store.state.tabs.first(where: { $0.id == (values["withId"] ?? store.state.activeTabId) }), let other = store.state.tabs.first(where: { $0.id == id }), base.id != id, base.spaceId == other.spaceId else { return }
@@ -148,19 +149,105 @@ import SwiftUI
         if space != tab.spaceId { store.select(id) }
         showActive()
     }
-    func handleSwipe(dx: Double, dy: Double, time: Double, began: Bool) -> Bool {
+    func handleSidebarScroll(_ event: NSEvent, point: NSPoint) -> Bool {
+        let phase: SpaceSwipePhase
+        if !event.momentumPhase.isEmpty {
+            phase = event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) ? .momentumEnded : .momentum
+        } else if event.phase.contains(.cancelled) { phase = .cancelled }
+        else if event.phase.contains(.ended) { phase = .ended }
+        else if event.phase.contains(.began) || event.phase.contains(.mayBegin) { phase = .began }
+        else if event.phase.contains(.changed) || event.phase.contains(.stationary) { phase = .changed }
+        else { phase = .unphased }
+        let available = !sidebar.isHidden && auxiliaryPanel == nil && searchPanel == nil && !model.siteControlsOpen && !model.downloadsExpanded && model.dragging == nil && window.attachedSheet == nil
+        let inside = sidebar.frame.contains(point)
+        if !available || (phase == .began && !inside) {
+            if swipe.tracking || swipe.consumesMomentum || model.swipeOffset != 0 || model.swipeEdge != nil {
+                swipe = SpaceSwipe(); settleSwipe()
+            }
+            return false
+        }
+        guard inside || swipe.tracking || swipe.consumesMomentum else { return false }
+        return handleSwipe(dx: -event.scrollingDeltaX, dy: -event.scrollingDeltaY, time: event.timestamp, phase: phase)
+    }
+    func settleSwipe() {
+        swipeReset?.cancel()
+        swipeCapture = nil
+        if model.swipeOutgoing == nil {
+            withAnimation(swipeAnimation) { model.swipeOffset = 0 }
+        }
+        let work = DispatchWorkItem { [weak self] in self?.model.swipeEdge = nil }
+        swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.4, execute: work)
+        let pointer = root.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        if !model.pinned && !sidebar.frame.contains(pointer) { scheduleHide() }
+    }
+    var swipeAnimation: Animation {
+        .timingCurve(0.2, 0.75, 0.25, 1, duration: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.30)
+    }
+    func captureSpaceForSwipe() -> (image: NSImage, origin: CGPoint)? {
+        func anchor(_ id: String, in view: NSView) -> NSView? {
+            if view.identifier?.rawValue == id { return view }
+            for child in view.subviews { if let found = anchor(id, in: child) { return found } }
+            return nil
+        }
+        guard let content = anchor("sidebar-space-content", in: sidebarContent),
+              let viewport = anchor("sidebar-space-viewport", in: sidebarContent) else { return nil }
+        let contentRect = sidebarContent.convert(content.bounds, from: content)
+        let rect = contentRect.intersection(sidebarContent.convert(viewport.bounds, from: viewport)).intersection(sidebarContent.bounds)
+        guard !rect.isEmpty, let bitmap = sidebarContent.bitmapImageRepForCachingDisplay(in: rect) else { return nil }
+        sidebarContent.cacheDisplay(in: rect, to: bitmap)
+        let image = NSImage(size: rect.size); image.addRepresentation(bitmap)
+        return (image, CGPoint(x: rect.minX-contentRect.minX, y: rect.minY-contentRect.minY))
+    }
+    func animateSpaceSwipe(to id: String, direction: Int, offset: CGFloat) {
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let distance = CGFloat(store.state.preferences.sidebarWidth)-16
+        swipeTransition += 1
+        let generation = swipeTransition
+        var transaction = Transaction(); transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            model.swipeOutgoing = reduceMotion ? nil : swipeCapture?.image
+            model.swipeOutgoingOrigin = swipeCapture?.origin ?? .zero
+            model.swipeOutgoingOffset = offset
+            model.swipeOffset = reduceMotion ? 0 : CGFloat(direction)*distance + offset
+            selectSpace(id, duringSwipe: true)
+        }
+        swipeCapture = nil
+        // Give the incoming content one layout pass at its starting position.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.swipeTransition == generation else { return }
+            withAnimation(self.swipeAnimation) {
+                self.model.swipeOffset = 0
+                self.model.swipeOutgoingOffset = -CGFloat(direction)*distance
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now()+0.32) { [weak self] in
+                guard let self, self.swipeTransition == generation else { return }
+                self.model.swipeOutgoing = nil
+            }
+        }
+    }
+    func handleSwipe(dx: Double, dy: Double, time: Double, phase: SpaceSwipePhase) -> Bool {
         let index = store.state.spaces.firstIndex { $0.id == store.state.activeSpaceId } ?? 0
-        let result = swipe.update(dx: dx, dy: dy, time: time, index: index, count: store.state.spaces.count, began: began)
-        guard result.consumed else { return false }
-        model.swipeOffset = result.offset; model.swipeEdge = result.edge
-        if result.step != 0 {
-            selectSpace(store.state.spaces[index+result.step].id)
-            model.swipeOffset = CGFloat(result.step)*35
-            withAnimation(.easeOut(duration: 0.18)) { model.swipeOffset = 0 }
+        let result = swipe.update(dx: dx, dy: dy, time: time, index: index, count: store.state.spaces.count, phase: phase)
+        if phase == .ended || phase == .cancelled || phase == .momentumEnded { settleSwipe(); return result.consumed }
+        if phase == .momentum { return result.consumed }
+        if phase == .began {
+            swipeTransition += 1; swipeCapture = nil; model.swipeOutgoing = nil
+            swipeReset?.cancel(); model.swipeEdge = nil; model.swipeOffset = 0
         }
         swipeReset?.cancel()
-        let work = DispatchWorkItem { [weak self] in withAnimation(.easeOut(duration: 0.18)) { self?.model.swipeOffset = 0; self?.model.swipeEdge = nil } }
-        swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.18, execute: work)
+        if phase == .unphased {
+            let work = DispatchWorkItem { [weak self] in self?.swipe = SpaceSwipe(); self?.settleSwipe() }
+            swipeReset = work; DispatchQueue.main.asyncAfter(deadline: .now()+0.25, execute: work)
+        }
+        guard result.consumed else { return false }
+        hideWork?.cancel(); hideWork = nil
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if !reduceMotion && swipeCapture == nil && (!swipe.committed || result.step != 0) { swipeCapture = captureSpaceForSwipe() }
+        if !swipe.committed { model.swipeOffset = reduceMotion ? 0 : result.offset; model.swipeEdge = result.edge }
+        if result.step != 0 {
+            model.swipeEdge = nil
+            animateSpaceSwipe(to: store.state.spaces[index+result.step].id, direction: result.step, offset: reduceMotion ? 0 : result.offset)
+        }
         return true
     }
     func stepTab(_ step: Int) {

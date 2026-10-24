@@ -7,9 +7,10 @@ import Foundation
     }
     func saveFavorite(id: String? = nil, name: String, input: String) {
         guard let url = SavedBrowserState.resolve(input, engine: state.preferences.searchEngine), !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let favorite = BrowserFavorite(id: id ?? UUID().uuidString, name: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)), url: url.absoluteString)
+        let owner = state.favorites.first(where: { $0.id == id })?.spaceId ?? state.activeSpaceId
+        let favorite = BrowserFavorite(id: id ?? UUID().uuidString, name: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)), url: url.absoluteString, spaceId: owner)
         if let index = state.favorites.firstIndex(where: { $0.id == id }) { state.favorites[index] = favorite }
-        else if state.favorites.count < 12 { state.favorites.append(favorite) }
+        else if favorites(in: owner).count < 12 { state.favorites.append(favorite) }
         persist()
     }
     func deleteFavorite(_ id: String) {
@@ -18,9 +19,17 @@ import Foundation
         persist()
     }
     func reorderFavorite(_ id: String, before: String?) {
-        guard id != before, let from = state.favorites.firstIndex(where: { $0.id == id }), before == nil || state.favorites.contains(where: { $0.id == before }) else { return }
+        guard id != before, let from = state.favorites.firstIndex(where: { $0.id == id }), before == nil || state.favorites.contains(where: { $0.id == before && $0.spaceId == state.favorites[from].spaceId }) else { return }
         let item = state.favorites.remove(at: from)
         state.favorites.insert(item, at: before.flatMap { target in state.favorites.firstIndex { $0.id == target } } ?? state.favorites.count); persist()
+    }
+    @discardableResult func moveFavorite(_ id: String, to space: String) -> Bool {
+        guard state.spaces.contains(where: { $0.id == space }), favorites(in: space).count < 12,
+              let index = state.favorites.firstIndex(where: { $0.id == id }), state.favorites[index].spaceId != space else { return false }
+        var favorite = state.favorites.remove(at: index); favorite.spaceId = space; state.favorites.append(favorite)
+        // Keep a live page in its original profile, as an ordinary tab.
+        for index in state.tabs.indices where state.tabs[index].favoriteId == id { state.tabs[index].favoriteId = nil }
+        persist(); return true
     }
     func createFolder(name: String) {
         let name = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
@@ -65,7 +74,7 @@ import Foundation
     }
     func deleteSpace(_ id: String) {
         guard state.spaces.count > 1, !state.tabs.contains(where: { $0.spaceId == id }) else { return }
-        state.spaces.removeAll { $0.id == id }; state.folders.removeAll { $0.spaceId == id }; state.sanitize(); persist()
+        state.spaces.removeAll { $0.id == id }; state.folders.removeAll { $0.spaceId == id }; state.favorites.removeAll { $0.spaceId == id }; state.sanitize(); persist()
     }
     func reorderSpace(_ id: String, before: String) {
         guard id != before, let from = state.spaces.firstIndex(where: { $0.id == id }), state.spaces.contains(where: { $0.id == before }) else { return }
@@ -73,26 +82,45 @@ import Foundation
     }
 }
 
+enum SpaceSwipePhase: String {
+    case began, changed, ended, cancelled, momentum, momentumEnded, unphased
+}
+
 struct SpaceSwipe {
-    var last = -Double.infinity, x = 0.0, y = 0.0, committed = 0.0, reverse = 0.0
+    private var last = -Double.infinity, x = 0.0, y = 0.0
     var axis = 0
-    mutating func update(dx: Double, dy: Double, time: Double, index: Int, count: Int, began: Bool = false) -> (consumed: Bool, offset: Double, edge: String?, step: Int) {
-        if began || time-last > 0.16 { self = SpaceSwipe() }
+    private(set) var tracking = false
+    private(set) var committed = false
+    private(set) var consumesMomentum = false
+    mutating func update(dx: Double, dy: Double, time: Double, index: Int, count: Int, phase: SpaceSwipePhase = .unphased) -> (consumed: Bool, offset: Double, edge: String?, step: Int) {
+        if phase == .momentum || phase == .momentumEnded {
+            let consumed = consumesMomentum || (tracking && axis == 1)
+            if phase == .momentumEnded { self = SpaceSwipe() }
+            return (consumed, 0, nil, 0)
+        }
+        if phase == .ended || phase == .cancelled {
+            let consumed = tracking && axis == 1
+            self = SpaceSwipe(); consumesMomentum = consumed
+            return (consumed, 0, nil, 0)
+        }
+        if phase == .began || (phase == .unphased && (!tracking || time-last > 0.25)) {
+            self = SpaceSwipe(); tracking = true
+        }
+        // A changed event without a start belongs to a gesture that began
+        // outside the sidebar. Never acquire it halfway through scrolling.
+        guard tracking, dx.isFinite, dy.isFinite, time.isFinite, count > 0 else { return (false, 0, nil, 0) }
         last = time; x += dx; y += dy
         if axis == 0 {
-            if abs(x) >= 8 && abs(x) > abs(y)*1.15 { axis = 1 }
-            else if abs(y) >= 8 && abs(y) > abs(x)*1.25 { axis = 2 }
+            if abs(x) >= 8 && abs(x) > abs(y)*1.35 { axis = 1 }
+            else if abs(y) >= 8 && abs(y) > abs(x)*1.05 { axis = 2 }
         }
         guard axis == 1 else { return (false, 0, nil, 0) }
-        if committed != 0 {
-            reverse = dx.sign == (-committed).sign ? reverse+dx : 0
-            if abs(reverse) < 24 { return (true, 0, nil, 0) }
-            x = reverse; y = 0; reverse = 0; committed = 0
-        }
+        consumesMomentum = true
+        guard !committed else { return (true, 0, nil, 0) }
         let sign = x < 0 ? -1 : 1
         let outside = index+sign < 0 || index+sign >= count
         let offset = -Double(sign)*(outside ? 28*(1-exp(-abs(x)/75)) : min(48, abs(x)*0.7))
-        if !outside && abs(x) >= 52 { committed = Double(sign); return (true, 0, nil, sign) }
+        if !outside && abs(x) >= 52 { committed = true; return (true, offset, nil, sign) }
         return (true, offset, outside ? (sign < 0 ? "First Space" : "Last Space") : nil, 0)
     }
 }

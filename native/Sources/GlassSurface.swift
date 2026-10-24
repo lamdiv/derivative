@@ -1,0 +1,61 @@
+import SwiftUI
+
+private typealias GlassEnvironment<Value> = SwiftUI.Environment<Value>
+
+enum GlassSurfaceKind { case sidebar, panel, search, control }
+
+/// Use system Liquid Glass for navigation surfaces on macOS 26+.
+/// Older systems retain a frosted treatment and opaque accessibility fallback.
+private struct GlassSurface: ViewModifier {
+    var dark: Bool
+    var accent: Color
+    var surface: Color
+    var radius: CGFloat
+    var kind: GlassSurfaceKind
+    var elevated: Bool
+    @GlassEnvironment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
+    private var needsReadingSurface: Bool { kind == .panel || kind == .search }
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), !reduceTransparency, kind != .control {
+            content.background {
+                // Text-heavy panels need a stable reading surface, independent
+                // of the website underneath. Keep glass around the soft rim.
+                if needsReadingSurface { shape.fill(surface.opacity(dark ? 0.96 : 0.97)).allowsHitTesting(false) }
+            }.glassEffect(.regular.tint(accent.opacity(kind == .sidebar ? 0.16 : 0.06)), in: shape)
+        } else {
+            fallback(content: content)
+        }
+    }
+    private func fallback(content: Content) -> some View {
+        content.background {
+            ZStack {
+                if reduceTransparency {
+                    shape.fill(kind == .control ? (dark ? Color.white.opacity(0.09) : Color.black.opacity(0.04)) : surface)
+                } else if needsReadingSurface {
+                    shape.fill(.regularMaterial)
+                    shape.fill(surface.opacity(dark ? 0.96 : 0.97))
+                } else if kind == .sidebar {
+                    shape.fill(surface.opacity(dark ? 0.62 : 0.72))
+                } else {
+                    shape.fill(LinearGradient(colors: [.white.opacity(dark ? 0.075 : 0.5), .white.opacity(dark ? 0.025 : 0.23)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+                if kind != .control {
+                    shape.fill(LinearGradient(colors: [accent.opacity(kind == .sidebar ? (dark ? 0.18 : 0.23) : 0.06), accent.opacity(kind == .sidebar ? 0.07 : 0.02)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    if !reduceTransparency {
+                        shape.fill(LinearGradient(colors: [.white.opacity(dark ? 0.045 : 0.16), .clear, .clear], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                }
+            }.allowsHitTesting(false)
+        }.overlay {
+            shape.strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.14 : 0.38), .white.opacity(dark ? 0.025 : 0.10), .white.opacity(dark ? 0.055 : 0.20)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: kind == .control ? 0.5 : 0.8)
+                .opacity(kind == .control ? 0.4 : 1).allowsHitTesting(false)
+        }.shadow(color: .black.opacity(elevated ? (dark ? 0.16 : 0.08) : 0), radius: 18, y: 8)
+    }
+}
+extension View {
+    @MainActor func derivativeGlass(_ model: BrowserModel, radius: CGFloat, kind: GlassSurfaceKind, elevated: Bool = false) -> some View {
+        modifier(GlassSurface(dark: model.dark, accent: model.accent, surface: model.surface, radius: radius, kind: kind, elevated: elevated))
+    }
+}

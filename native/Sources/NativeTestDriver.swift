@@ -78,7 +78,7 @@ import Foundation
             case "resize":
                 controller.window.setContentSize(NSSize(width: command["width"] as? Double ?? 1280, height: command["height"] as? Double ?? 840))
                 controller.layout()
-            case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, began: command["began"] as? Bool ?? false)
+            case "swipe": _ = controller.handleSwipe(dx: command["dx"] as? Double ?? 0, dy: command["dy"] as? Double ?? 0, time: command["time"] as? Double ?? 0, phase: SpaceSwipePhase(rawValue: command["phase"] as? String ?? "") ?? (command["began"] as? Bool == true ? .began : .unphased))
             case "shortcut": shortcut(Int32(command["key"] as? Int ?? 0))
             case "recent": controller.recent(command["step"] as? Int ?? 1)
             case "commitRecent": controller.commitRecent()
@@ -99,7 +99,7 @@ import Foundation
                 "displayAddress": controller.model.displayAddress, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
-                "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.state.favorites.count),
+                "visibleFavoriteIDs": controller.store.currentFavorites.map(\.id), "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.currentFavorites.count),
                 "systemControlsHidden": [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { controller.window.standardWindowButton($0)?.isHidden },
                 "fullscreenTransitioning": controller.fullscreenTransitioning,
                 "windowFullscreen": controller.window.styleMask.contains(.fullScreen), "rootHidden": controller.root.isHidden, "rootAttached": controller.root.window === controller.window,
@@ -108,6 +108,8 @@ import Foundation
                 "sidebarPresentationX": controller.sidebar.layer?.presentation()?.frame.minX ?? controller.sidebar.frame.minX,
                 "splitIDs": controller.model.splitIDs, "overlay": controller.overlayKind,
                 "sidebarMode": controller.model.effectiveSidebarMode, "dark": controller.model.dark, "swipeEdge": controller.model.swipeEdge ?? "", "swipeOffset": controller.model.swipeOffset,
+                "swipeAnimating": controller.model.swipeOutgoing != nil, "swipePreviewCaptured": controller.swipeCapture != nil,
+                "reduceMotion": NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                 "suggestions": nativeSuggestions(command["query"] as? String ?? "", store: controller.store).map { ["id": $0.id, "kind": $0.kind, "url": $0.url] },
                 "downloads": controller.model.downloads.map { ["id": $0.id, "path": $0.path, "name": $0.name, "status": $0.status] },
                 "pageFrames": controller.pageHost.subviews.filter { $0 !== controller.home && $0 !== controller.splitDivider && !$0.isHidden }.map { rect($0.frame) },
@@ -128,8 +130,8 @@ import Foundation
     }
     private func controls(in view: NSView, controller: BrowserController) -> [[String: Any]] {
         var result: [[String: Any]] = []
-        if view.identifier?.rawValue == "sidebar-header-layout" {
-            result.append(["label": "header", "bounds": rect(controller.root.convert(view.bounds, from: view))])
+        if let id = view.identifier?.rawValue, id == "sidebar-header-layout" || id.hasPrefix("sidebar-tab-") {
+            result.append(["label": id == "sidebar-header-layout" ? "header" : id, "bounds": rect(controller.root.convert(view.bounds, from: view))])
         }
         for child in view.subviews {
             result += controls(in: child, controller: controller)

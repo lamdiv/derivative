@@ -11,6 +11,7 @@ struct BrowserFavorite: Codable, Identifiable, Equatable {
     var id: String
     var name: String
     var url: String
+    var spaceId: String? = nil
 }
 struct BrowserFolder: Codable, Identifiable, Equatable {
     var id: String
@@ -47,7 +48,7 @@ struct BrowserPreferences: Codable, Equatable {
     var sidebarWidth: CGFloat { sidebarSize == "compact" ? 252 : sidebarSize == "wide" ? 320 : 288 }
 }
 struct SavedBrowserState: Codable, Equatable {
-    var version = 1
+    var version = 2
     var spaces = [BrowserSpace(id: "personal", name: "Personal", icon: "camera.macro", color: "lavender"), BrowserSpace(id: "work", name: "Work", icon: "diamond", color: "mint"), BrowserSpace(id: "study", name: "Study", icon: "sun.max", color: "peach")]
     var tabs: [BrowserTab] = []
     var folders: [BrowserFolder] = []
@@ -76,12 +77,28 @@ struct SavedBrowserState: Codable, Equatable {
         if spaces.isEmpty { spaces = SavedBrowserState().spaces }
         let spaceIDs = Set(spaces.map(\.id))
         if !spaceIDs.contains(activeSpaceId) { activeSpaceId = spaces[0].id }
-        favorites = unique(Array(favorites.filter { validID($0.id) && Self.webURL($0.url) != nil }.prefix(12)), id: { $0.id })
-        let favoriteIDs = Set(favorites.map(\.id))
+        var scoped: [BrowserFavorite] = []
+        var counts: [String: Int] = [:]
+        var migrated: [String: [String: String]] = [:]
+        for favorite in unique(favorites.filter { validID($0.id) && Self.webURL($0.url) != nil }, id: { $0.id }) {
+            let owners = favorite.spaceId.map { [$0] } ?? spaces.map(\.id)
+            for owner in owners where spaceIDs.contains(owner) && counts[owner, default: 0] < 12 {
+                var copy = favorite; copy.spaceId = owner
+                if favorite.spaceId == nil {
+                    if owner != activeSpaceId { copy.id = UUID().uuidString }
+                    migrated[favorite.id, default: [:]][owner] = copy.id
+                }
+                scoped.append(copy); counts[owner, default: 0] += 1
+            }
+        }
+        favorites = scoped; version = 2
         folders = unique(folders.filter { validID($0.id) && spaceIDs.contains($0.spaceId) }, id: { $0.id })
         tabs = unique(tabs.filter { validID($0.id) && spaceIDs.contains($0.spaceId) && Self.webURL($0.url) != nil }, id: { $0.id })
         for index in tabs.indices {
-            if let id = tabs[index].favoriteId, !favoriteIDs.contains(id) { tabs[index].favoriteId = nil }
+            if let id = tabs[index].favoriteId {
+                let mapped = migrated[id]?[tabs[index].spaceId] ?? id
+                tabs[index].favoriteId = favorites.contains { $0.id == mapped && $0.spaceId == tabs[index].spaceId } ? mapped : nil
+            }
             if let id = tabs[index].folderId, !folders.contains(where: { $0.id == id && $0.spaceId == tabs[index].spaceId }) { tabs[index].folderId = nil }
         }
         if !tabs.contains(where: { $0.id == activeTabId && $0.spaceId == activeSpaceId }) {
@@ -125,13 +142,19 @@ struct SavedBrowserState: Codable, Equatable {
     var active: BrowserTab? { state.tabs.first { $0.id == state.activeTabId } }
     var space: BrowserSpace { state.spaces.first { $0.id == state.activeSpaceId } ?? state.spaces[0] }
     var currentTabs: [BrowserTab] { state.tabs.filter { $0.spaceId == state.activeSpaceId } }
+    var currentFavorites: [BrowserFavorite] { favorites(in: state.activeSpaceId) }
+    func favorites(in space: String) -> [BrowserFavorite] { state.favorites.filter { $0.spaceId == space } }
     init(directory: URL) {
         file = directory.appendingPathComponent("native-state.json")
-        if let data = try? Data(contentsOf: file), var saved = try? JSONDecoder().decode(SavedBrowserState.self, from: data), saved.version == 1 {
+        if let data = try? Data(contentsOf: file), var saved = try? JSONDecoder().decode(SavedBrowserState.self, from: data), [1, 2].contains(saved.version) {
+            if saved.favorites.contains(where: { $0.spaceId == nil }) {
+                let backup = directory.appendingPathComponent("native-state-before-space-favorites.json")
+                if !FileManager.default.fileExists(atPath: backup.path) { try? FileManager.default.copyItem(at: file, to: backup) }
+            }
             saved.sanitize()
             if !saved.preferences.restoreSession { saved.tabs = []; saved.activeTabId = nil }
             state = saved
-        } else { state = SavedBrowserState() }
+        } else { state = SavedBrowserState(); state.sanitize() }
     }
     func persist() {
         pending?.cancel()
@@ -154,7 +177,8 @@ struct SavedBrowserState: Codable, Equatable {
     @discardableResult func open(_ url: String, spaceId: String? = nil, favoriteId: String? = nil) -> String? {
         let space = spaceId ?? state.activeSpaceId
         guard SavedBrowserState.webURL(url) != nil, state.spaces.contains(where: { $0.id == space }) else { return nil }
-        let tab = BrowserTab(id: UUID().uuidString, spaceId: space, url: url, title: URL(string: url)?.host ?? url, favoriteId: favoriteId, lastActive: Date().timeIntervalSince1970)
+        let ownedFavorite = favoriteId.flatMap { id in state.favorites.contains { $0.id == id && $0.spaceId == space } ? id : nil }
+        let tab = BrowserTab(id: UUID().uuidString, spaceId: space, url: url, title: URL(string: url)?.host ?? url, favoriteId: ownedFavorite, lastActive: Date().timeIntervalSince1970)
         state.tabs.append(tab); select(tab.id); return tab.id
     }
     func select(_ id: String) {

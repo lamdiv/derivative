@@ -17,7 +17,7 @@ See the [native build guide](native/README.md) for setup, storage, and verificat
 ## A place for every part of your day
 
 - **Spaces with separate sign-ins.** Each Space has its own persistent cookies and website storage. Swipe across the sidebar or use the bottom icons to switch.
-- **A sidebar that fits.** Keep it fixed, reveal it on hover, or hide it. Choose from three widths and pastel themes, with light, dark, and system appearances.
+- **A sidebar that fits.** Keep it fixed, reveal it on hover, or hide it. Choose from three widths and pastel themes, with light, dark, and system appearances. Native blur, soft highlights, and a subtle glass rim add depth without heavy borders.
 - **Search without the clutter.** Press **⌘T** to search or enter an address. A tab opens only when you confirm. Open-tab suggestions stay within your current Space.
 - **Your favorites, up front.** Arrange up to twelve favorites in balanced rows, with pairs filling half a row each. Drag to reorder; right-click to edit or remove. An open favorite stays highlighted in the grid.
 - **Tabs with a little organization.** Pin tabs, group them in folders, and drag them between Spaces. Tabs and organization restore when you return.

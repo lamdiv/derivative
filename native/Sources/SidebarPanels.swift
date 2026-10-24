@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NativeSplitGroup: View {
     @ObservedObject var model: BrowserModel
+    @SidebarRowState<String?> private var hoveredID = nil
     var body: some View {
         HStack(spacing: 2) {
             ForEach(model.splitIDs, id: \.self) { id in
@@ -9,11 +10,12 @@ struct NativeSplitGroup: View {
                     Button { model.selectTab(id) } label: {
                         HStack(spacing: 6) { SiteIcon(url: tab.url, title: tab.title); Text(tab.title).font(.system(size: 11)).lineLimit(1); Spacer(minLength: 0) }
                             .padding(9).frame(maxWidth: .infinity).contentShape(Rectangle())
-                            .background(model.wash.opacity(model.store.state.activeTabId == id ? 1 : 0), in: RoundedRectangle(cornerRadius: 8))
-                    }.accessibilityLabel("Focus split tab \(tab.title)")
+                            .background(model.wash.opacity(model.store.state.activeTabId == id ? 1 : (hoveredID == id ? 0.65 : 0)), in: RoundedRectangle(cornerRadius: 8))
+                    }.buttonStyle(SidebarImmediateButtonStyle()).accessibilityLabel("Focus split tab \(tab.title)")
+                        .onHover { inside in if inside { hoveredID = id } else if hoveredID == id { hoveredID = nil } }
                 }
             }
-        }.background(model.wash, in: RoundedRectangle(cornerRadius: 10))
+        }.sidebarItemGlass(model, radius: 10)
             .contextMenu {
                 Button("Separate tabs") { model.send("split.close") }
                 ForEach(model.splitIDs, id: \.self) { id in if let tab = model.store.state.tabs.first(where: { $0.id == id }) { Button("Close \(tab.title)") { model.closeTab(id) } } }
@@ -78,7 +80,7 @@ struct SidebarDownloads: View {
                 }.frame(height: min(330, CGFloat(model.downloads.count)*64)).scrollIndicators(.hidden)
             }
         }.padding(16).frame(width: 320)
-            .foregroundStyle(model.ink).background(model.surface.opacity(0.94))
+            .foregroundStyle(model.ink).derivativeGlass(model, radius: 14, kind: .panel)
             .buttonStyle(.plain).preferredColorScheme(model.dark ? .dark : .light)
     }
 }

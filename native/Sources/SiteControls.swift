@@ -6,14 +6,18 @@ private typealias ViewState<Value> = SwiftUI.State<Value>
 struct SidebarAddressBar: View {
     @ObservedObject var model: BrowserModel
     @ViewState<String?> private var copiedURL = nil
+    @ViewState<Bool> private var addressHovered = false
     var body: some View {
         HStack(spacing: 1) {
             Button(action: model.search) {
-                Text(model.displayAddress).font(.system(size: 12, weight: .medium))
-                    .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-                    .padding(.leading, 12).contentShape(Rectangle())
-            }.accessibilityLabel("Edit address").help(model.address+" · ⌘L")
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(model.displayAddress).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }.padding(.horizontal, 11).frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                    .background(addressHovered ? model.wash : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+            }.buttonStyle(SidebarImmediateButtonStyle()).onHover { addressHovered = $0 }
+                .accessibilityLabel("Edit address").help(model.address+" · ⌘L")
             AddressAction(icon: copiedURL == model.address ? "checkmark" : "link", title: copiedURL == model.address ? "Link copied" : "Copy link", wash: model.wash) {
                 model.send("copy"); copiedURL = model.address
             }
@@ -22,7 +26,7 @@ struct SidebarAddressBar: View {
             }.popover(isPresented: $model.siteControlsOpen, arrowEdge: .trailing) {
                 SiteControlsPanel(model: model)
             }
-        }.padding(.trailing, 5).background(model.wash, in: RoundedRectangle(cornerRadius: 11))
+        }.padding(.trailing, 5).derivativeGlass(model, radius: 12, kind: .control)
             .task(id: copiedURL) {
                 guard copiedURL != nil else { return }
                 do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
@@ -83,7 +87,7 @@ private struct SiteControlsPanel: View {
             Toggle(isOn: Binding(get: { muted }, set: { muted = $0; model.send("page.mute", ["muted": String($0)]) })) {
                 Label("Mute tab", systemImage: muted ? "speaker.slash" : "speaker.wave.2").font(.system(size: 12))
             }.toggleStyle(.switch).controlSize(.mini).accessibilityLabel("Mute current tab")
-        }.padding(16).frame(width: 260).foregroundStyle(model.ink).background(model.surface.opacity(0.96))
+        }.padding(16).frame(width: 260).foregroundStyle(model.ink).derivativeGlass(model, radius: 14, kind: .panel)
             .buttonStyle(.plain).preferredColorScheme(model.dark ? .dark : .light)
             .onAppear(perform: refresh).onChange(of: model.store.state.activeTabId) { _, _ in refresh() }
             .onChange(of: model.address) { _, _ in refresh() }
