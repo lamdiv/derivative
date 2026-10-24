@@ -1,12 +1,10 @@
 node_modules/
-dist/
-dist-electron/
 release/
 test-results/
 .DS_Store
 *.log
 
-# Native prototype dependencies and build artifacts
+# Native dependencies and build artifacts
 native/.cache/
 native/build/
 __pycache__/
