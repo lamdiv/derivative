@@ -7,6 +7,7 @@
 <p align="center"><strong>A native macOS browser, powered by Chromium.</strong><br />Inspired by the little things that made Arc feel like home.</p>
 <p align="center">
   <a href="#get-started">Get started</a> ·
+  <a href="https://derivativebrowser.com">Website</a> ·
   <a href="native/README.md">Build guide</a> ·
   <a href="docs/shortcuts.md">Shortcuts</a> ·
   <a href="docs/architecture.md">Architecture</a>
@@ -23,17 +24,18 @@ Derivative (d) is a small, independent browser for macOS. Spaces for different p
 | | |
 | :--- | :--- |
 | **Spaces** | Separate website sign-ins, colors, and favorites. Swipe to switch. |
-| **Your favorite places** | Up to 12 favorites per Space. Drag to arrange or move between Spaces. |
-| **A quieter sidebar** | Fixed, floating, or hidden. Drag to resize, with light and dark pastel themes. |
+| **Your favorite places** | Up to 12 favorites per Space. Open favorites have a border; right-click to close their tab while keeping the saved tile. |
+| **A quieter sidebar** | Put it on the left or right. Keep it fixed, floating, or hidden, and drag its inner edge to resize. |
 | **Search, one shortcut away** | Press **⌘T**, type, and confirm. A new tab opens when you're ready. |
-| **Tabs that stay tidy** | Pin tabs, make folders, and pick up where you left off. |
+| **Tabs that stay tidy** | Pin tabs, make folders, or clear Today while keeping pinned tabs and favorites. |
 | **Two pages together** | Drag one tab onto another for a live, resizable split view. |
+| **A little personality** | Lilac, mint, peach, sky, and rose palettes, with light, dark, and system appearance. |
 
 The interface is built with **SwiftUI and AppKit**. Websites run in **Chromium through CEF**. Liquid Glass is available on macOS 26+, with a frosted fallback on earlier systems.
 
 ## Get started
 
-You'll need **Python 3.12+** and **Apple's command-line tools** with Swift and C++ support. Install the tools with `xcode-select --install` if needed.
+You'll need **Python 3.12+** and **Apple's command-line tools** with Swift and C++ support. Install the tools with `xcode-select --install` if needed. This builds with the supplied CEF engine; it does not compile Chromium from source.
 
 ```sh
 git clone https://github.com/lamdiv/derivative.git
@@ -51,15 +53,28 @@ For setup details, profile storage, and custom engine builds, see the **[build g
 - **⌘T** — search or open a new tab.
 - **⌘L** — edit the current address.
 - **⌘S** — show or hide the sidebar.
-- **⌘,** — choose your appearance, sidebar size, and Space colors.
+- **⌘+ / ⌘− / ⌘0** — zoom in, zoom out, or reset. A brief badge shows the percentage.
+- **⌘,** — choose your appearance, sidebar position, width, and Space colors.
 
-Right-click favorites and tabs for their menus. The bottom-left sidebar button opens Downloads. Find every shortcut in **[the shortcut reference](docs/shortcuts.md)**.
+Drag a favorite into **Pinned** or **Today** to put its open page in that section while keeping the saved favorite. Drag it onto a Space icon to move the saved favorite between Spaces. Drop onto the middle of another tab to split; use its top or bottom edge to reorder.
+
+Right-click favorites and tabs for their menus. The download button at the bottom of the sidebar opens recent downloads. Find every shortcut in **[the shortcut reference](docs/shortcuts.md)**.
+
+## Your browsing, on your Mac
+
+Each Space has separate cookies and website storage. Favorites are separate too; browsing history is shared within the app. There is no built-in sync service.
+
+- **Clear history** also clears recently closed tabs and old browsing sessions in migration backups. Saved favorites and current tabs remain.
+- **Clear cookies** removes cookies across Spaces. Other website storage remains, so this may not sign you out of every site.
+- **Delete a Space** currently removes its organization and favorites, while retaining its website-data directory.
+
+Website permission prompts identify the requesting site. A granted permission may be remembered. These controls are still being developed; this is not a claim of a completed security audit. See [storage and architecture](docs/architecture.md) for implementation details.
 
 ## Still taking shape
 
 Derivative is an early project built around one main window. Extensions, password management, sync, automatic updates, and private browsing are not implemented yet.
 
-The default engine plays WebM/VP9/Opus; **H.264/AAC playback is not enabled**. Some media and sign-in services need further work. See [media compatibility](native/README.md#video-compatibility-and-engine-builds) for details.
+The default engine plays **WebM/VP9/Opus**. **H.264/AAC and MP4 streaming are not enabled**, so many MP4 videos and some YouTube livestreams will not play. Codec-enabled Chromium is a separate build that has not been completed. Some sign-in and media services also need further testing. See [media compatibility](native/README.md#video-compatibility-and-engine-builds) for details.
 
 Tabs and organization restore after restarting. Unsaved forms, split arrangements, and download history last for the current session. Builds are locally signed for development; distribution signing and notarization are still required.
 
@@ -69,7 +84,7 @@ The app lives in [`native/Sources`](native/Sources). The [architecture guide](do
 
 ```sh
 npm ci                 # Node.js 22.12+; test tools only
-npm test               # Swift state + engine package checks
+npm test               # State, engine packaging, and favicon checks
 npm run build          # Build the native app
 npm run test:integration
 ```
