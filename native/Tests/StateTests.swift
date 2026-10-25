@@ -15,6 +15,11 @@ import Foundation
         assert(SidebarSizing.width(5000, available: 1200) == 800)
         assert(SidebarSizing.width(440, available: 1200) == 440)
         store.state.preferences.customSidebarWidth = 440
+        var oldPreferences = try JSONSerialization.jsonObject(with: JSONEncoder().encode(store.state.preferences)) as! [String: Any]
+        oldPreferences.removeValue(forKey: "sidebarSide")
+        let decodedPreferences = try JSONDecoder().decode(BrowserPreferences.self, from: JSONSerialization.data(withJSONObject: oldPreferences))
+        assert(!decodedPreferences.sidebarOnRight && decodedPreferences.customSidebarWidth == 440)
+        store.state.preferences.sidebarSide = "right"
         let personal = store.open("https://example.com/")!
         store.selectSpace("work")
         assert(store.active == nil && store.currentTabs.isEmpty)
@@ -26,6 +31,7 @@ import Foundation
         let restored = BrowserStore(directory: directory)
         assert(restored.state.activeTabId == personal && restored.state.tabs.count == 2)
         assert(restored.state.preferences.customSidebarWidth == 440)
+        assert(restored.state.preferences.sidebarOnRight)
         assert(restored.active?.title == "Personal" && restored.state.history.count == 1)
         restored.selectSpace("work"); assert(restored.active?.id == work)
         restored.remove(work); assert(restored.active == nil && restored.state.tabs.count == 1)

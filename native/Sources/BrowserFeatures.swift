@@ -113,6 +113,8 @@ import SwiftUI
             let favorite = store.state.favorites.first { $0.id == id }
             prompt(favorite == nil ? "Add favorite" : "Edit favorite", fields: [("Name", favorite?.name ?? store.active?.title ?? ""), ("Website address", favorite?.url ?? store.active?.url ?? "")]) { [weak self] fields in self?.store.saveFavorite(id: favorite?.id, name: fields[0], input: fields[1]) }
         case "favorite.toToday": favoriteToToday(id)
+        case "favorite.close":
+            if let tab = store.currentTabs.first(where: { $0.favoriteId == id }) { closeTab(tab.id) }
         case "favorite.save": store.saveFavorite(id: id.isEmpty ? nil : id, name: values["name"] ?? "", input: values["url"] ?? "")
         case "favorite.delete": store.deleteFavorite(id)
         case "favorite.reorder": store.reorderFavorite(id, before: values["beforeId"])
@@ -142,6 +144,12 @@ import SwiftUI
         case "split.close": model.splitIDs = []; showActive()
         case "split.ratio": splitRatio = min(0.8, max(0.2, Double(values["ratio"] ?? "") ?? 0.5)); showActive(preserveSearch: true)
         case "preferences":
+            if let side = values["sidebarSide"], ["left", "right"].contains(side), store.state.preferences.sidebarSide != side {
+                hideWork?.cancel(); hideWork = nil
+                sidebarAnimation += 1; sidebar.layer?.removeAllAnimations()
+                sidebarTransitioning = false; sidebarHiding = false
+                store.state.preferences.sidebarSide = side
+            }
             if let value = values["theme"], ["system", "light", "dark"].contains(value) { store.state.preferences.theme = value }
             if let value = values["sidebarSize"], ["compact", "comfortable", "wide"].contains(value) { store.state.preferences.sidebarSize = value; store.state.preferences.customSidebarWidth = nil }
             if let value = values["sidebarMode"], ["fixed", "hover", "hidden"].contains(value) {

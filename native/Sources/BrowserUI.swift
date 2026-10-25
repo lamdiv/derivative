@@ -151,11 +151,7 @@ import QuartzCore
                 }
                 if event.type == .leftMouseDown, let panel = self.auxiliaryPanel, !panel.frame.contains(point) { self.closeOverlay(); consumed = true; return }
                 if event.type == .leftMouseDown && self.searchPanel != nil && !self.searchPanel!.frame.contains(point) { self.closeSearch(); consumed = true; return }
-                if event.type == .mouseMoved && !self.sidebarResizing && !self.swipe.tracking && !self.model.pinned && !self.model.siteControlsOpen && !self.model.downloadsExpanded && self.searchPanel == nil && self.auxiliaryPanel == nil && self.model.dragging == nil && self.window.attachedSheet == nil {
-                    if point.x <= 8 && self.model.effectiveSidebarMode != "hidden" { self.setRevealed(true) }
-                    else if point.x > self.sidebar.frame.maxX+16 { self.scheduleHide() }
-                    else { self.hideWork?.cancel(); self.hideWork = nil; if self.sidebarHiding { self.setRevealed(true) } }
-                }
+                if event.type == .mouseMoved { self.updateSidebarHover(point) }
             }
             return consumed ? nil : event
         }
@@ -176,14 +172,15 @@ import QuartzCore
         let inset: CGFloat = model.expanded && !model.pinned ? 0 : 8
         let width = SidebarSizing.width(store.state.preferences.sidebarWidth, available: bounds.width)
         let offset: CGFloat = model.pinned ? width+16 : inset
-        pageHost.frame = NSRect(x: offset, y: inset, width: max(1, bounds.width-offset-inset), height: max(1, bounds.height-inset*2))
+        let onRight = store.state.preferences.sidebarOnRight
+        pageHost.frame = NSRect(x: onRight ? inset : offset, y: inset, width: max(1, bounds.width-offset-inset), height: max(1, bounds.height-inset*2))
         pageHost.layer?.cornerRadius = inset == 0 ? 0 : 14
         if home != nil { home.frame = pageHost.bounds }
-        sidebar.frame = NSRect(x: 8, y: 8, width: width, height: bounds.height-16)
+        sidebar.frame = NSRect(x: onRight ? bounds.width-width-8 : 8, y: 8, width: width, height: bounds.height-16)
         sidebarContent.frame = sidebar.bounds
         sidebar.isHidden = !model.pinned && !revealed && !sidebarHiding
         if !sidebar.isHidden { root.addSubview(sidebar, positioned: .above, relativeTo: pageHost) }
-        sidebarResizeHandle.frame = NSRect(x: sidebar.frame.maxX-2, y: sidebar.frame.minY+14, width: 8, height: max(0, sidebar.frame.height-28))
+        sidebarResizeHandle.frame = NSRect(x: onRight ? sidebar.frame.minX-6 : sidebar.frame.maxX-2, y: sidebar.frame.minY+14, width: 8, height: max(0, sidebar.frame.height-28))
         sidebarResizeHandle.isHidden = sidebar.isHidden || sidebarTransitioning || searchPanel != nil || auxiliaryPanel != nil
         root.addSubview(sidebarResizeHandle, positioned: .above, relativeTo: sidebar)
         scrim.frame = bounds
@@ -288,6 +285,15 @@ import QuartzCore
         } else { store.open(favorite.url) }
         showActive()
     }
+    func updateSidebarHover(_ point: NSPoint) {
+        guard !sidebarResizing, !swipe.tracking, !model.pinned, !model.siteControlsOpen, !model.downloadsExpanded, searchPanel == nil, auxiliaryPanel == nil, model.dragging == nil, window.attachedSheet == nil else { return }
+        let onRight = store.state.preferences.sidebarOnRight
+        let atEdge = onRight ? point.x >= root.bounds.maxX-8 : point.x <= 8
+        let outside = onRight ? point.x < sidebar.frame.minX-16 : point.x > sidebar.frame.maxX+16
+        if atEdge && model.effectiveSidebarMode != "hidden" { setRevealed(true) }
+        else if outside { scheduleHide() }
+        else { hideWork?.cancel(); hideWork = nil; if sidebarHiding { setRevealed(true) } }
+    }
     func setRevealed(_ value: Bool) {
         hideWork?.cancel(); hideWork = nil
         guard model.dragging == nil || value else { return }
@@ -308,8 +314,9 @@ import QuartzCore
         sidebarHiding = !visible; sidebarTransitioning = true
         layout()
         let destination = sidebar.frame
-        let sourceX = wasVisible ? (currentX ?? destination.minX) : -destination.width
-        sidebar.frame = NSRect(x: visible ? 8 : -destination.width, y: destination.minY, width: destination.width, height: destination.height)
+        let offscreenX = store.state.preferences.sidebarOnRight ? root.bounds.maxX : -destination.width
+        let sourceX = wasVisible ? (currentX ?? destination.minX) : offscreenX
+        sidebar.frame = NSRect(x: visible ? destination.minX : offscreenX, y: destination.minY, width: destination.width, height: destination.height)
         sidebar.alphaValue = 1
         guard let layer = sidebar.layer else { sidebarHiding = false; sidebarTransitioning = false; layout(); return }
         let slide = CABasicAnimation(keyPath: "position.x")

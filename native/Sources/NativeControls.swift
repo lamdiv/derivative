@@ -187,7 +187,7 @@ struct SidebarView: View {
     private var header: some View {
         HStack(spacing: 8) {
             if !model.expanded { Spacer().frame(width: 64) }
-            Button(action: model.toggle) { Image(systemName: "sidebar.left") }.help("Show or hide sidebar · ⌘S").accessibilityLabel("Toggle sidebar")
+            Button(action: model.toggle) { Image(systemName: model.store.state.preferences.sidebarOnRight ? "sidebar.right" : "sidebar.left") }.help("Show or hide sidebar · ⌘S").accessibilityLabel("Toggle sidebar")
             Spacer(minLength: 8)
             Button { DerivativeBack() } label: { Image(systemName: "arrow.left") }.disabled(!model.canBack).accessibilityLabel("Go back")
             Button { DerivativeForward() } label: { Image(systemName: "arrow.right") }.disabled(!model.canForward).accessibilityLabel("Go forward")
