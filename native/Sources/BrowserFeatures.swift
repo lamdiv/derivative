@@ -2,6 +2,32 @@ import AppKit
 import SwiftUI
 
 @MainActor extension BrowserController {
+    func clearCurrentSpaceTabs() {
+        guard !model.clearingTabs else { return }
+        let tabs = store.currentTabs.filter { !$0.pinned && $0.favoriteId == nil }
+        guard !tabs.isEmpty else { return }
+        clearingSpaceID = store.state.activeSpaceId
+        // Close the active tab last so lazy/background tabs are never opened just to close them.
+        clearTabQueue = tabs.filter { $0.id != store.state.activeTabId }.map(\.id) + tabs.filter { $0.id == store.state.activeTabId }.map(\.id)
+        model.clearingTabs = true; advanceClearingTabs()
+    }
+    private func advanceClearingTabs() {
+        while !clearTabQueue.isEmpty {
+            let id = clearTabQueue.removeFirst()
+            guard let tab = store.state.tabs.first(where: { $0.id == id }), tab.spaceId == clearingSpaceID, !tab.pinned, tab.favoriteId == nil else { continue }
+            clearingTabID = id; closeTab(id); return
+        }
+        clearingTabID = nil; clearingSpaceID = nil; model.clearingTabs = false
+    }
+    func finishClearingTab(_ id: String) {
+        guard clearingTabID == id else { return }
+        clearingTabID = nil
+        DispatchQueue.main.async { [weak self] in self?.advanceClearingTabs() }
+    }
+    func cancelClearingTabs(_ id: String) {
+        guard clearingTabID == id else { return }
+        clearTabQueue = []; clearingTabID = nil; clearingSpaceID = nil; model.clearingTabs = false
+    }
     func setPageZoom(_ percent: Int) {
         let value = min(300, max(25, percent))
         DerivativeSetPageZoom(Int32(value)); model.pageZoom = value
@@ -82,6 +108,7 @@ import SwiftUI
         case "page.zoom": if let percent = Int(values["percent"] ?? "") { setPageZoom(percent) }
         case "page.mute": DerivativeSetPageMuted(values["muted"] == "true")
         case "sidebar.toggle": toggleSidebar()
+        case "tabs.clear": clearCurrentSpaceTabs()
         case "favorite.edit":
             let favorite = store.state.favorites.first { $0.id == id }
             prompt(favorite == nil ? "Add favorite" : "Edit favorite", fields: [("Name", favorite?.name ?? store.active?.title ?? ""), ("Website address", favorite?.url ?? store.active?.url ?? "")]) { [weak self] fields in self?.store.saveFavorite(id: favorite?.id, name: fields[0], input: fields[1]) }
@@ -336,7 +363,11 @@ import SwiftUI
     let item = BrowserDownload(id: identifier, name: suggested.isEmpty ? fallback : suggested, path: fullPath, status: String(cString: status), received: received, total: total)
     if let index = controller.model.downloads.firstIndex(where: { $0.id == item.id }) { controller.model.downloads[index] = item } else { controller.model.downloads.insert(item, at: 0) }
 }
-@_cdecl("DerivativeCancelTabClose") @MainActor func cancelTabClose(_ id: UnsafePointer<CChar>) { currentController?.pendingMoves.removeValue(forKey: String(cString: id)) }
+@_cdecl("DerivativeCancelTabClose") @MainActor func cancelTabClose(_ id: UnsafePointer<CChar>) {
+    let value = String(cString: id)
+    currentController?.pendingMoves.removeValue(forKey: value)
+    currentController?.cancelClearingTabs(value)
+}
 @_cdecl("DerivativePageFocused") @MainActor func pageFocused(_ id: UnsafePointer<CChar>) { currentController?.selectTab(String(cString: id)) }
 
 @MainActor final class SplitDivider: NSView {

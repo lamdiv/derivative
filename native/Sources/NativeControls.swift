@@ -36,6 +36,7 @@ struct BrowserDownload: Identifiable {
     @Published var downloadsExpanded = false
     @Published var siteControlsOpen = false
     @Published var pageZoom = 100
+    @Published var clearingTabs = false
     @Published var settingsSection = "Appearance"
     @Published var newSpaceName = ""
     @Published var newSpaceColor = "blush"
@@ -209,7 +210,17 @@ struct SidebarView: View {
             .contentShape(Rectangle()).onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "favoriteGrid", id: ""))
     }
     private func groupLabel(_ title: String, pinned: Bool) -> some View {
-        Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
+        HStack {
+            Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+            Spacer()
+            if !pinned && model.store.currentTabs.contains(where: { !$0.pinned && $0.favoriteId == nil }) {
+                Button { model.send("tabs.clear") } label: {
+                    Text(model.clearingTabs ? "Clearing…" : "Clear").font(.system(size: 10, weight: .medium)).padding(.horizontal, 5).padding(.vertical, 4).contentShape(Rectangle())
+                }.buttonStyle(SidebarImmediateButtonStyle()).foregroundStyle(.secondary)
+                    .disabled(model.clearingTabs).accessibilityLabel("Clear tabs in this Space")
+                    .help("Close regular tabs in this Space. Keep favorites and pinned tabs. Reopen with ⇧⌘T.")
+            }
+        }.padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading)
             .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: pinned ? "pinned" : "today", id: model.store.state.activeSpaceId))
     }
     private var footer: some View {

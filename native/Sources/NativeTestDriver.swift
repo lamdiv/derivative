@@ -29,6 +29,7 @@ import Foundation
             case "selectSpace": controller.selectSpace(id)
             case "selectTab": controller.selectTab(id)
             case "closeTab": controller.closeTab(id)
+            case "openFavorite": controller.openFavorite(id)
             case "drop":
                 controller.model.dragging = command["token"] as? String
                 let drop = SidebarDrop(model: controller.model, kind: command["kind"] as? String ?? "", id: id)
@@ -143,7 +144,7 @@ import Foundation
                 "pageFrames": controller.pageHost.subviews.filter { $0 !== controller.home && $0 !== controller.splitDivider && !$0.isHidden }.map { rect($0.frame) },
                 "state": state, "loadedPages": DerivativePageCount(),
                 "searchSelectionLength": (controller.window.firstResponder as? NSTextView)?.selectedRange.length ?? -1,
-                "searchBounds": rect(controller.searchPanel?.frame ?? .zero), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden,
+                "searchBounds": rect(controller.searchPanel?.frame ?? .zero), "searchOpen": controller.searchPanel != nil, "homeVisible": !controller.home.isHidden, "clearingTabs": controller.model.clearingTabs,
                 "sidebarVisible": !controller.sidebar.isHidden, "pageBounds": rect(bounds),
                 "rootBounds": rect(controller.root.bounds), "sidebarBounds": rect(controller.sidebar.frame),
                 "sidebarResizeBounds": rect(controller.sidebarResizeHandle.frame), "sidebarResizeHidden": controller.sidebarResizeHandle.isHidden,
