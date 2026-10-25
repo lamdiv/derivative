@@ -32,19 +32,21 @@ import ImageIO
         if let image = images.object(forKey: key as NSString) { return image }
         if let retry = failures.object(forKey: key as NSString), retry.timeIntervalSinceNow > 0 { return nil }
         if let task = pending[key] { return await task.value }
-        let task = Task { await self.load(page: page, root: root) }
+        let task = Task { await self.load(root: root) }
         pending[key] = task
         let image = await task.value; pending[key] = nil
         if let image { images.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.size.height) * 4) }
         else { failures.setObject(NSDate(timeIntervalSinceNow: 60), forKey: key as NSString) }
         return image
     }
-    private func load(page: URL, root: URL) async -> NSImage? {
+    private func load(root: URL) async -> NSImage? {
         let conventional = root.appendingPathComponent("favicon.ico")
         if let image = await icon(conventional) { return image }
-        guard let (data, response) = await resource(page, limit: 256 * 1024, headOnly: true),
+        // Rendering an unopened favorite or history result must not visit its
+        // saved path or replay query tokens just to discover an icon.
+        guard let (data, response) = await resource(root, limit: 256 * 1024, headOnly: true),
               response.mimeType?.lowercased().contains("html") == true else { return nil }
-        for url in Self.candidates(in: data, base: response.url ?? page).prefix(4) where url != conventional {
+        for url in Self.candidates(in: data, base: response.url ?? root).prefix(4) where url != conventional {
             if let image = await icon(url) { return image }
         }
         return nil

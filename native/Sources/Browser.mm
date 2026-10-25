@@ -130,9 +130,13 @@ class BrowserClient final : public CefClient, public WebContextMenus, public Cef
   bool OnShowPermissionPrompt(CefRefPtr<CefBrowser>, uint64_t, const CefString& origin, uint32_t permissions, CefRefPtr<CefPermissionPromptCallback> callback) override {
     const uint32_t supported = CEF_PERMISSION_TYPE_GEOLOCATION | CEF_PERMISSION_TYPE_NOTIFICATIONS | CEF_PERMISSION_TYPE_CLIPBOARD;
     if (!IsWebsite(origin) || (permissions & ~supported) || host.window.attachedSheet) { callback->Continue(CEF_PERMISSION_RESULT_DENY); return true; }
-    NSString* capability = (permissions & CEF_PERMISSION_TYPE_GEOLOCATION) ? @"your location" : (permissions & CEF_PERMISSION_TYPE_NOTIFICATIONS) ? @"notifications" : @"the clipboard";
-    NSAlert* alert = [[NSAlert alloc] init]; alert.messageText = @"Website permission"; alert.informativeText = [NSString stringWithFormat:@"%s wants access to %@.", origin.ToString().c_str(), capability];
-    [alert addButtonWithTitle:@"Don't Allow"]; [alert addButtonWithTitle:@"Allow Once"];
+    NSMutableArray<NSString*>* capabilities = [NSMutableArray array];
+    if (permissions & CEF_PERMISSION_TYPE_GEOLOCATION) [capabilities addObject:@"your location"];
+    if (permissions & CEF_PERMISSION_TYPE_NOTIFICATIONS) [capabilities addObject:@"notifications"];
+    if (permissions & CEF_PERMISSION_TYPE_CLIPBOARD) [capabilities addObject:@"the clipboard"];
+    NSAlert* alert = [[NSAlert alloc] init]; alert.messageText = @"Website permission";
+    alert.informativeText = [NSString stringWithFormat:@"%s wants access to %@. Your choice may be remembered for this site.", origin.ToString().c_str(), [capabilities componentsJoinedByString:@", "]];
+    [alert addButtonWithTitle:@"Don't Allow"]; [alert addButtonWithTitle:@"Allow"];
     [alert beginSheetModalForWindow:host.window completionHandler:^(NSModalResponse response) { callback->Continue(response == NSAlertSecondButtonReturn ? CEF_PERMISSION_RESULT_ACCEPT : CEF_PERMISSION_RESULT_DENY); }];
     return true;
   }

@@ -67,6 +67,9 @@ import QuartzCore
     var splitRatio = 0.5
     let splitDivider = SplitDivider()
     let sidebarResizeHandle = SidebarResizeHandle()
+    var zoomIndicator: ZoomIndicatorHost!
+    var zoomDismiss: DispatchWorkItem?
+    var zoomIndicatorGeneration = 0
     var sidebarResizing = false
     var pageEnteredFullscreen = false
     var nativeFullscreen = false
@@ -98,6 +101,9 @@ import QuartzCore
         sidebar.wantsLayer = true
         sidebar.addSubview(sidebarContent); sidebarContent.autoresizingMask = [.width, .height]
         root.addSubview(pageHost); root.addSubview(sidebar)
+        zoomIndicator = ZoomIndicatorHost(rootView: ZoomIndicatorView(model: model))
+        zoomIndicator.safeAreaRegions = []; zoomIndicator.sizingOptions = []
+        root.addSubview(zoomIndicator)
         sidebarResizeHandle.controller = self
         root.addSubview(sidebarResizeHandle)
         // Native AppKit controls in the content hierarchy avoid the title bar's
@@ -183,6 +189,8 @@ import QuartzCore
         sidebarResizeHandle.frame = NSRect(x: onRight ? sidebar.frame.minX-6 : sidebar.frame.maxX-2, y: sidebar.frame.minY+14, width: 8, height: max(0, sidebar.frame.height-28))
         sidebarResizeHandle.isHidden = sidebar.isHidden || sidebarTransitioning || searchPanel != nil || auxiliaryPanel != nil
         root.addSubview(sidebarResizeHandle, positioned: .above, relativeTo: sidebar)
+        zoomIndicator.frame = NSRect(x: pageHost.frame.midX-64, y: pageHost.frame.minY+16, width: 128, height: 44)
+        root.addSubview(zoomIndicator, positioned: .above, relativeTo: pageHost)
         scrim.frame = bounds
         if let panel = searchPanel {
             root.addSubview(scrim, positioned: .above, relativeTo: sidebar)
@@ -235,6 +243,7 @@ import QuartzCore
     }
     func showActive(preserveSearch: Bool = false) {
         guard ready else { return }
+        dismissZoomIndicator()
         model.siteControlsOpen = false
         if !preserveSearch || store.active == nil { closeOverlay(focus: false) }
         if model.splitIDs.count == 2 && (!model.splitIDs.contains(store.state.activeTabId ?? "") || model.splitIDs.contains(where: { id in !store.currentTabs.contains { $0.id == id } })) { model.splitIDs = [] }

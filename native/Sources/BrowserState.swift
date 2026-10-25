@@ -215,6 +215,28 @@ struct SavedBrowserState: Codable, Equatable {
             catch { NSLog("Derivative metadata: %@", error.localizedDescription) }
         }
     }
+    func clearHistory() throws {
+        pending?.cancel()
+        state.history = []
+        let snapshot = state; let file = file
+        // Serialize behind any in-flight write so an older snapshot cannot
+        // restore history after this operation has completed.
+        try writes.sync {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(snapshot).write(to: file, options: .atomic)
+            for name in ["native-state-before-space-favorites.json", "native-state-before-default-favorites.json"] {
+                let backup = file.deletingLastPathComponent().appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: backup.path) else { continue }
+                guard var metadata = try JSONSerialization.jsonObject(with: Data(contentsOf: backup)) as? [String: Any] else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                metadata["history"] = []
+                metadata["tabs"] = []
+                metadata["activeTabId"] = NSNull()
+                try JSONSerialization.data(withJSONObject: metadata).write(to: backup, options: .atomic)
+            }
+        }
+    }
     @discardableResult func open(_ url: String, spaceId: String? = nil, favoriteId: String? = nil) -> String? {
         let space = spaceId ?? state.activeSpaceId
         guard SavedBrowserState.webURL(url) != nil, state.spaces.contains(where: { $0.id == space }) else { return nil }

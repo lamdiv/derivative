@@ -133,6 +133,9 @@ import Foundation
             }
             let reply: [String: Any] = [
                 "displayAddress": controller.model.displayAddress, "keyHandled": keyHandled, "pageZoom": DerivativePageZoom(), "pageMuted": DerivativePageMuted(), "siteControlsOpen": controller.model.siteControlsOpen,
+                "zoomIndicatorVisible": controller.model.zoomIndicatorVisible,
+                "zoomIndicatorBounds": rect(controller.zoomIndicator.frame),
+                "zoomIndicatorInterceptsClicks": controller.zoomIndicator.hitTest(.zero) != nil,
                 "devToolsOpen": DerivativeHasDevTools(),
                 "contextMenu": (try? JSONSerialization.jsonObject(with: Data(String(cString: DerivativeContextMenuSnapshot()).utf8))) ?? [:],
                 "visibleFavoriteIDs": controller.store.currentFavorites.map(\.id), "dropOperation": dropOperation, "favoriteRows": favoriteRowSizes(controller.store.currentFavorites.count),

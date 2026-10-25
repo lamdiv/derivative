@@ -29,8 +29,22 @@ import SwiftUI
         clearTabQueue = []; clearingTabID = nil; clearingSpaceID = nil; model.clearingTabs = false
     }
     func setPageZoom(_ percent: Int) {
+        guard store.active != nil else { return }
         let value = min(300, max(25, percent))
         DerivativeSetPageZoom(Int32(value)); model.pageZoom = value
+        zoomDismiss?.cancel(); zoomIndicatorGeneration += 1
+        let generation = zoomIndicatorGeneration
+        model.zoomIndicatorVisible = true
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.zoomIndicatorGeneration == generation else { return }
+            self.model.zoomIndicatorVisible = false; self.zoomDismiss = nil
+        }
+        zoomDismiss = work
+        DispatchQueue.main.asyncAfter(deadline: .now()+1.6, execute: work)
+    }
+    func dismissZoomIndicator() {
+        zoomDismiss?.cancel(); zoomDismiss = nil; zoomIndicatorGeneration += 1
+        model.zoomIndicatorVisible = false
     }
     @objc func zoomInPage() { setPageZoom(PageZoom.next(Int(DerivativePageZoom()), direction: 1)) }
     @objc func zoomOutPage() { setPageZoom(PageZoom.next(Int(DerivativePageZoom()), direction: -1)) }
@@ -162,11 +176,15 @@ import SwiftUI
             store.persist(); applyPreferences(); layout()
         case "clear.request":
             guard ["history", "cache", "cookies"].contains(id), window.attachedSheet == nil else { return }
-            let alert = NSAlert(); alert.messageText = "Clear \(id)?"; alert.informativeText = id == "cookies" ? "This signs you out of websites in all Spaces." : "This clears browsing \(id) in all Spaces."
+            let alert = NSAlert(); alert.messageText = "Clear \(id)?"; alert.informativeText = id == "cookies" ? "This removes cookies in all Spaces and may sign you out of websites. Other website storage is kept." : "This clears browsing \(id) in all Spaces."
             alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Clear")
             alert.beginSheetModal(for: window) { [weak self] response in if response == .alertSecondButtonReturn { self?.perform("clear", ["id": id]) } }
         case "clear":
-            if id == "history" { store.state.history = []; store.persist() }
+            if id == "history" {
+                closedTabs = []
+                do { try store.clearHistory() }
+                catch { model.error = "Browsing history could not be fully cleared. Please try again." }
+            }
             else if ["cache", "cookies"].contains(id) { id.withCString { DerivativeClearData($0) } }
         case "download.cancel": id.withCString { DerivativeCancelDownload($0) }
         case "download.open", "download.reveal":

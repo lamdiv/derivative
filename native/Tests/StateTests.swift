@@ -150,6 +150,24 @@ import Foundation
         _ = swipe.update(dx: 0, dy: 0, time: 10.1, index: 0, count: 3, phase: .ended)
         _ = swipe.update(dx: 0, dy: 0, time: 10.2, index: 0, count: 3, phase: .momentumEnded)
         assert(!swipe.consumesMomentum)
+        let privacyStore = BrowserStore(directory: directory.appendingPathComponent("privacy"))
+        let privacyTab = privacyStore.open("https://example.org/callback?token=fixture-only")!
+        privacyStore.update(privacyTab, title: "Privacy fixture", url: "https://example.org/callback?token=fixture-only", loading: false, back: false, forward: false)
+        privacyStore.flush()
+        let oldMetadata = try Data(contentsOf: privacyStore.file)
+        let backupNames = ["native-state-before-space-favorites.json", "native-state-before-default-favorites.json"]
+        for name in backupNames { try oldMetadata.write(to: privacyStore.file.deletingLastPathComponent().appendingPathComponent(name)) }
+        let keptFavorites = privacyStore.state.favorites
+        privacyStore.persist() // A pending older snapshot must not restore cleared history.
+        try privacyStore.clearHistory()
+        let cleared = BrowserStore(directory: privacyStore.file.deletingLastPathComponent())
+        assert(cleared.state.history.isEmpty && cleared.state.tabs.count == 1 && cleared.state.favorites == keptFavorites)
+        for name in backupNames {
+            let backup = try JSONDecoder().decode(SavedBrowserState.self, from: Data(contentsOf: privacyStore.file.deletingLastPathComponent().appendingPathComponent(name)))
+            assert(backup.history.isEmpty && backup.tabs.isEmpty && backup.activeTabId == nil)
+            assert(backup.favorites == keptFavorites, "Clearing history must preserve recoverable saved favorites")
+        }
+        try privacyStore.clearHistory() // Repeated clearing is harmless.
         dirty.preferences.restoreSession = false
         try JSONEncoder().encode(dirty).write(to: restored.file, options: .atomic)
         assert(BrowserStore(directory: directory).state.tabs.isEmpty)
