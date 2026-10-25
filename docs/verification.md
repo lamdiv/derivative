@@ -144,3 +144,11 @@ The native build, feature fixture, sidebar layout fixture, and sidebar animation
 Three macOS crash reports identified a TCC termination caused by a missing `NSBluetoothAlwaysUsageDescription`. The app and all Chromium helper bundles now include a description explaining Bluetooth use for nearby-device passkeys and security keys. This supplies the required prompt text; it does not grant Bluetooth permission or change existing permission decisions.
 
 The packaging regression, native build, checks of all six generated Info.plists, deep signature verification, and sandboxed browsing smoke test passed. The rebuilt app was opened at the restored Google sign-in page. Account authentication and a real passkey exchange were not completed as part of verification.
+
+## Privacy review corrections
+
+General website permission prompts now say Allow and explain that a choice may be remembered, matching the normal CEF permission grant instead of promising one-time access. Combined supported requests list every requested capability. Cookie-clearing confirmation describes cookies-only clearing without guaranteeing complete sign-out.
+
+Favicon discovery falls back to HTML at the origin root rather than fetching a saved page's path or query. Local HTTP tests verify that rendering an unopened token-bearing URL never requests that URL, while declared PNG discovery, redirects/base URLs, caching, and downsampling still work. Icons declared only on deeper pages may fall back to an initial.
+
+History clearing is serialized with metadata writes, scrubs history and old tab sessions from both known migration backups while preserving favorites, and clears the in-memory recently closed list. The state regression checks persisted state and both backups; the browser feature regression verifies that reopening a closed tab after clearing history has no effect. These regressions, the native build, and deep signature verification passed. Real permission grants were not performed. Space profile erasure remains a separate product feature; deleting a Space currently retains its website data.

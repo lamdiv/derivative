@@ -162,11 +162,15 @@ import SwiftUI
             store.persist(); applyPreferences(); layout()
         case "clear.request":
             guard ["history", "cache", "cookies"].contains(id), window.attachedSheet == nil else { return }
-            let alert = NSAlert(); alert.messageText = "Clear \(id)?"; alert.informativeText = id == "cookies" ? "This signs you out of websites in all Spaces." : "This clears browsing \(id) in all Spaces."
+            let alert = NSAlert(); alert.messageText = "Clear \(id)?"; alert.informativeText = id == "cookies" ? "This removes cookies in all Spaces and may sign you out of websites. Other website storage is kept." : "This clears browsing \(id) in all Spaces."
             alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Clear")
             alert.beginSheetModal(for: window) { [weak self] response in if response == .alertSecondButtonReturn { self?.perform("clear", ["id": id]) } }
         case "clear":
-            if id == "history" { store.state.history = []; store.persist() }
+            if id == "history" {
+                closedTabs = []
+                do { try store.clearHistory() }
+                catch { model.error = "Browsing history could not be fully cleared. Please try again." }
+            }
             else if ["cache", "cookies"].contains(id) { id.withCString { DerivativeClearData($0) } }
         case "download.cancel": id.withCString { DerivativeCancelDownload($0) }
         case "download.open", "download.reveal":

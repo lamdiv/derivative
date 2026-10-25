@@ -266,6 +266,9 @@ try {
   await send('clear', { id: 'cache' });
   await waitFor(async () => await moved.evaluate(async () => await fetch('/cache').then(r => r.text())) !== cached, 'HTTP cache clearing failed');
   await send('clear', { id: 'history' }); assert.equal((await snapshot()).state.history.length, 0);
+  const tabsAfterHistoryClear = (await snapshot()).state.tabs.map(t => t.id);
+  await send('reopen');
+  assert.deepEqual((await snapshot()).state.tabs.map(t => t.id), tabsAfterHistoryClear, 'Clearing history must also clear recently closed tabs');
   stage = 'clear current Space tabs';
   await send('selectSpace', { id: 'personal' });
   s = await snapshot(); const otherTabs = s.state.tabs.filter(t => t.spaceId !== 'personal').map(t => t.id).sort();

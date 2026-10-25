@@ -59,6 +59,10 @@ Existing browser data remains at `~/Library/Application Support/Derivative Nativ
 
 Metadata version 2 assigns favorites to Spaces. Existing shared favorites are copied once into independent collections for each existing Space, preserving their order and rebinding open favorite tabs to the correct copy. The original metadata is backed up as `native-state-before-space-favorites.json` before conversion. The original nine-site starter collection is replaced by the three current defaults only when every original name and URL remains unchanged; customized collections are preserved, with a `native-state-before-default-favorites.json` backup before replacement. New Spaces start with an empty collection. Removing a Space without open tabs also removes that Space's favorite collection. Do not open version 2 metadata with an older build that only understands version 1.
 
+Clearing history also clears recently closed tabs and removes history and old tab sessions from these migration backups; saved favorites remain recoverable. Clearing cookies removes cookies only, and other website storage remains. Deleting a Space removes its organization metadata but currently retains its website-data directory.
+
+Favicon discovery uses `/favicon.ico` and public HTML at the site's root, without website cookies or credentials. It does not request saved paths or query tokens when showing favorites or search suggestions. Pages that declare an icon only at a deeper path may show a fallback initial.
+
 ## Verify
 
 Install the repository development dependencies (`npm ci`) for Chromium integration checks:
