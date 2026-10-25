@@ -30,6 +30,12 @@ import Foundation
             case "selectTab": controller.selectTab(id)
             case "closeTab": controller.closeTab(id)
             case "openFavorite": controller.openFavorite(id)
+            case "providerDrop":
+                let provider = controller.model.provider(command["token"] as? String ?? "")
+                // Reproduce mouse-up clearing presentation state before SwiftUI receives the drop.
+                controller.model.dragging = nil; controller.model.dropTarget = nil
+                let drop = SidebarDrop(model: controller.model, kind: command["kind"] as? String ?? "", id: id)
+                _ = drop.performProviderDrop(provider, y: command["y"] as? Double ?? 17)
             case "drop":
                 controller.model.dragging = command["token"] as? String
                 let drop = SidebarDrop(model: controller.model, kind: command["kind"] as? String ?? "", id: id)

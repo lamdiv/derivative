@@ -142,7 +142,10 @@ try {
   stage = 'organization';
   await send('folder.toggle', { id: folder }); assert.equal((await snapshot()).state.folders[0].collapsed, true);
   await send('folder.rename', { id: folder, name: 'Read later' }); assert.equal((await snapshot()).state.folders[0].name, 'Read later');
-  await send('split.open', { id: 'two', withId: 'one' }); const second = await page('/two');
+  stage = 'split through native item provider';
+  await send('providerDrop', { token: 'tab:two', kind: 'tab', id: 'one', y: 17 });
+  await waitFor(async () => (await snapshot()).splitIDs.join(',') === 'one,two', 'Native provider drop must split after mouse-up clears the temporary token');
+  const second = await page('/two');
   await waitFor(async () => (await snapshot()).pageFrames.length === 2, 'Both native split panes must attach');
   s = await snapshot(); assert.deepEqual(s.splitIDs, ['one', 'two']);
   assert.equal(await first.evaluate(() => document.visibilityState), 'visible'); assert.equal(await second.evaluate(() => document.visibilityState), 'visible');
@@ -160,6 +163,13 @@ try {
   assert.ok(Math.abs(s.pageFrames[1].x+s.pageFrames[1].width-s.pageBounds.width) < 1, 'Both live split pages must fit beside the pinned sidebar');
   await send('expandedLayout', { expanded: false });
   await send('overlay.close'); await send('split.close');
+  await send('providerDrop', { token: 'tab:two', kind: 'tab', id: 'one', y: 2 });
+  await waitFor(async () => { const s = await snapshot(); return s.state.tabs.find(t => t.id === 'two')?.pinned === true; }, 'The top edge must still reorder');
+  assert.equal((await snapshot()).splitIDs.length, 0, 'Top edge reorders without splitting');
+  await send('tab.place', { id: 'two', pinned: 'false' });
+  await send('providerDrop', { token: 'tab:missing', kind: 'tab', id: 'one', y: 17 });
+  assert.equal((await snapshot()).splitIDs.length, 0, 'Invalid provider payloads cannot split');
+
   const initialSearch = await send('search');
   await send('searchQuery', { query: 'nothing matches this phrase' });
   await waitFor(async () => (await snapshot()).searchBounds.height < initialSearch.searchBounds.height, 'Search panel did not shrink to its visible content');

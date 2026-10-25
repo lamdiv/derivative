@@ -131,3 +131,10 @@ The native build and browser feature, sidebar layout, and sidebar animation fixt
 Dragging a favorite into Today transfers its existing browser tab by clearing the favorite association and ordinary tab placement flags. The saved favorite remains unchanged and inactive. An unopened favorite creates a regular tab instead. Drag feedback advertises a move for an existing favorite page and a copy when a new page is required. Opening the saved favorite later creates/selects a favorite-owned page, without reclaiming an independent regular tab merely because its URL matches.
 
 The native build, feature fixture, tabs/profiles fixture, and sidebar layout fixture passed. Tests verify unchanged tab and loaded-page counts during transfer, retained live form contents through the same CDP target, preserved favorite metadata, correct drop feedback, unopened-favorite creation, and independent reopening. The app was restarted with this build; physical drag interaction was not separately exercised.
+
+
+## Native tab-drop split race
+
+Split/reorder drops now load their source from the native NSItemProvider payload instead of depending on the transient sidebar drag token, which the window mouse-up monitor can clear before SwiftUI delivers the drop. The payload is bounded and validated against current state; stale or invalid tab IDs cannot create a split. Row centers still split tabs in the same Space, while row edges reorder. Native drop handlers also reject unsupported target/source combinations instead of accepting a drop with no action.
+
+The native build, feature fixture, sidebar layout fixture, and sidebar animation fixture passed. The regression creates a real registered item provider, clears presentation drag state to reproduce the race, loads the payload asynchronously through the same drop path, and verifies two live split pages. Edge reordering and invalid-payload rejection are also checked. Derivative was restarted. These checks do not constitute a physical drag review.
