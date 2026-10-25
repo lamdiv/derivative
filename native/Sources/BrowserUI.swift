@@ -56,6 +56,9 @@ import QuartzCore
     var errorPanels: [String: NSView] = [:]
     var overlayKind = ""
     var closedTabs: [BrowserTab] = []
+    var clearTabQueue: [String] = []
+    var clearingTabID: String?
+    var clearingSpaceID: String?
     var pendingMoves: [String: [String: String]] = [:]
     var swipe = SpaceSwipe()
     var swipeReset: DispatchWorkItem?
@@ -266,15 +269,24 @@ import QuartzCore
     }
     func closeTab(_ id: String) { id.withCString { DerivativeClosePage($0) } }
     func tabClosed(_ id: String) {
-        if let placement = pendingMoves.removeValue(forKey: id) { placeTab(id, values: placement, afterClose: true); return }
+        if let placement = pendingMoves.removeValue(forKey: id) { placeTab(id, values: placement, afterClose: true); finishClearingTab(id); return }
         if let tab = store.state.tabs.first(where: { $0.id == id }) { closedTabs.insert(tab, at: 0); closedTabs = Array(closedTabs.prefix(30)) }
         store.remove(id); showActive(preserveSearch: searchPanel != nil)
+        finishClearingTab(id)
     }
     func openFavorite(_ id: String) {
         guard let favorite = store.currentFavorites.first(where: { $0.id == id }) else { return }
-        if let index = store.state.tabs.firstIndex(where: { $0.spaceId == store.state.activeSpaceId && ($0.favoriteId == id || $0.url == favorite.url) }) {
+        if let index = store.state.tabs.firstIndex(where: { $0.spaceId == store.state.activeSpaceId && $0.favoriteId == id }) {
             store.state.tabs[index].favoriteId = id; selectTab(store.state.tabs[index].id)
         } else { store.open(favorite.url, favoriteId: id); showActive() }
+    }
+    func favoriteToToday(_ id: String) {
+        guard let favorite = store.state.favorites.first(where: { $0.id == id }) else { return }
+        if let tab = store.currentTabs.first(where: { $0.favoriteId == id }) {
+            store.placeTab(tab.id, space: tab.spaceId, pinned: false)
+            store.select(tab.id)
+        } else { store.open(favorite.url) }
+        showActive()
     }
     func setRevealed(_ value: Bool) {
         hideWork?.cancel(); hideWork = nil

@@ -117,3 +117,24 @@ The native build, state/engine checks, browser feature fixture, sidebar geometry
 The shared sidebar/search icon loader keeps the conventional `/favicon.ico` probe, then reads public HTML icon declarations when that probe fails. Relative URLs, redirects, and `<base>` are respected, with PNG preferred over SVG for native decoding. Requests use an ephemeral session without website cookies or credentials. Icon transfers are capped at 1 MiB, document discovery stops at the head or 256 KiB, decoded icons are reduced to 64 pixels, requests are deduplicated per origin, and failures are cached briefly. Script-generated and sign-in-only icon declarations are not covered by this public-HTML fallback.
 
 Local HTTP checks passed for a 404 conventional icon followed by declared PNG discovery, redirects/base resolution, invalid schemes, caching, deduplication, and downsampling. The opt-in live check decoded derivativebrowser.com's favicon. The native build, feature fixture, sidebar layout fixture, and sidebar animation fixture passed. The layout fixture now waits for asynchronous macOS deminiaturization instead of asserting its state immediately. Derivative was restarted with the updated loader, and the website logo was visually confirmed in its sidebar tab.
+
+
+## Clear regular tabs in a Space
+
+A Clear action beside Today appears when the current Space has regular tabs. It preserves pinned/folder tabs, open favorite tabs, and other Spaces. Closures are serialized through the existing CEF close flow, with the active tab last to avoid loading background tabs just to close them. A cancelled before-unload close stops the remaining queue. Completed closures enter the existing thirty-item recently closed list and can be reopened with ⇧⌘T.
+
+The native build and browser feature, sidebar layout, and sidebar animation fixtures passed. The feature fixture covers clearing a split pair, protected pinned/favorite tabs, other-Space preservation, unchanged favorite collections, reopening, repeated clearing, and the empty no-op. The app was restarted. Real unsaved-change prompts and a physical click on Clear were not exercised against user tabs.
+
+
+## Favorite pages moved into Today
+
+Dragging a favorite into Today transfers its existing browser tab by clearing the favorite association and ordinary tab placement flags. The saved favorite remains unchanged and inactive. An unopened favorite creates a regular tab instead. Drag feedback advertises a move for an existing favorite page and a copy when a new page is required. Opening the saved favorite later creates/selects a favorite-owned page, without reclaiming an independent regular tab merely because its URL matches.
+
+The native build, feature fixture, tabs/profiles fixture, and sidebar layout fixture passed. Tests verify unchanged tab and loaded-page counts during transfer, retained live form contents through the same CDP target, preserved favorite metadata, correct drop feedback, unopened-favorite creation, and independent reopening. The app was restarted with this build; physical drag interaction was not separately exercised.
+
+
+## Native tab-drop split race
+
+Split/reorder drops now load their source from the native NSItemProvider payload instead of depending on the transient sidebar drag token, which the window mouse-up monitor can clear before SwiftUI delivers the drop. The payload is bounded and validated against current state; stale or invalid tab IDs cannot create a split. Row centers still split tabs in the same Space, while row edges reorder. Native drop handlers also reject unsupported target/source combinations instead of accepting a drop with no action.
+
+The native build, feature fixture, sidebar layout fixture, and sidebar animation fixture passed. The regression creates a real registered item provider, clears presentation drag state to reproduce the race, loads the payload asynchronously through the same drop path, and verifies two live split pages. Edge reordering and invalid-payload rejection are also checked. Derivative was restarted. These checks do not constitute a physical drag review.

@@ -36,6 +36,7 @@ struct BrowserDownload: Identifiable {
     @Published var downloadsExpanded = false
     @Published var siteControlsOpen = false
     @Published var pageZoom = 100
+    @Published var clearingTabs = false
     @Published var settingsSection = "Appearance"
     @Published var newSpaceName = ""
     @Published var newSpaceColor = "blush"
@@ -209,7 +210,17 @@ struct SidebarView: View {
             .contentShape(Rectangle()).onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "favoriteGrid", id: ""))
     }
     private func groupLabel(_ title: String, pinned: Bool) -> some View {
-        Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
+        HStack {
+            Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+            Spacer()
+            if !pinned && model.store.currentTabs.contains(where: { !$0.pinned && $0.favoriteId == nil }) {
+                Button { model.send("tabs.clear") } label: {
+                    Text(model.clearingTabs ? "Clearing…" : "Clear").font(.system(size: 10, weight: .medium)).padding(.horizontal, 5).padding(.vertical, 4).contentShape(Rectangle())
+                }.buttonStyle(SidebarImmediateButtonStyle()).foregroundStyle(.secondary)
+                    .disabled(model.clearingTabs).accessibilityLabel("Clear tabs in this Space")
+                    .help("Close regular tabs in this Space. Keep favorites and pinned tabs. Reopen with ⇧⌘T.")
+            }
+        }.padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading)
             .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: pinned ? "pinned" : "today", id: model.store.state.activeSpaceId))
     }
     private var footer: some View {
@@ -305,23 +316,39 @@ struct FolderRow: View {
 struct SidebarDrop: DropDelegate {
     let model: BrowserModel
     let kind: String, id: String
-    func validateDrop(info: DropInfo) -> Bool { canDrop }
-    var canDrop: Bool {
-        guard let token = model.dragging else { return false }
-        if kind == "sidebar" { return token.hasPrefix("favorite:") }
-        if token.hasPrefix("favorite:") {
-            guard let favorite = model.store.state.favorites.first(where: { $0.id == String(token.dropFirst(9)) }) else { return false }
+    func validateDrop(info: DropInfo) -> Bool {
+        canDrop || (model.dragging == nil && info.hasItemsConforming(to: [derivativeDragType]))
+    }
+    var canDrop: Bool { accepts(model.dragging) }
+    private func accepts(_ token: String?) -> Bool {
+        guard let token else { return false }
+        let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return false }
+        let source = parts[1]
+        switch parts[0] {
+        case "favorite":
+            guard let favorite = model.store.state.favorites.first(where: { $0.id == source }) else { return false }
             if kind == "space" { return favorite.spaceId != id && model.store.state.spaces.contains { $0.id == id } && model.store.favorites(in: id).count < 12 }
             if ["favorite", "favoriteGrid"].contains(kind) { return favorite.spaceId == model.store.state.activeSpaceId || model.store.currentFavorites.count < 12 }
-            return ["today", "sidebar"].contains(kind) || (kind == "tab" && model.store.state.tabs.first { $0.id == id }?.pinned == false)
+            return kind == "today" || (kind == "tab" && model.store.state.tabs.first { $0.id == id }?.pinned == false)
+        case "tab":
+            guard let tab = model.store.state.tabs.first(where: { $0.id == source }) else { return false }
+            if ["favorite", "favoriteGrid"].contains(kind) { return model.store.currentFavorites.count < 12 }
+            if kind == "tab" { return source != id && model.store.state.tabs.contains { $0.id == id } }
+            if kind == "folder" { return model.store.state.folders.contains { $0.id == id && $0.spaceId == tab.spaceId } }
+            if kind == "space" { return model.store.state.spaces.contains { $0.id == id } }
+            return ["today", "pinned"].contains(kind)
+        case "folder": return kind == "folder" && source != id && model.store.state.folders.contains { $0.id == source } && model.store.state.folders.contains { $0.id == id }
+        case "space": return kind == "space" && source != id && model.store.state.spaces.contains { $0.id == source } && model.store.state.spaces.contains { $0.id == id }
+        default: return false
         }
-        if token.hasPrefix("tab:"), ["favorite", "favoriteGrid"].contains(kind) { return model.store.currentFavorites.count < 12 }
-        return true
     }
     var operation: DropOperation {
-        let favorite = model.dragging?.hasPrefix("favorite:") == true
-        let tab = model.dragging?.hasPrefix("tab:") == true
-        return (favorite && ["today", "tab"].contains(kind)) || (tab && ["favorite", "favoriteGrid"].contains(kind)) ? .copy : .move
+        if let token = model.dragging, token.hasPrefix("favorite:"), ["today", "tab"].contains(kind) {
+            let favorite = String(token.dropFirst(9))
+            return model.store.currentTabs.contains(where: { $0.favoriteId == favorite }) ? .move : .copy
+        }
+        return model.dragging?.hasPrefix("tab:") == true && ["favorite", "favoriteGrid"].contains(kind) ? .copy : .move
     }
     func dropEntered(info: DropInfo) {
         if kind == "favorite", let token = model.dragging, token.hasPrefix("favorite:") {
@@ -338,13 +365,29 @@ struct SidebarDrop: DropDelegate {
     func dropExited(info: DropInfo) { model.dropTarget = nil }
     private func update(_ info: DropInfo) {
         if kind == "space", model.dragging?.hasPrefix("favorite:") == true { model.dropTarget = "space:"+id }
-        if kind == "tab", let token = model.dragging, token.hasPrefix("tab:"), token != "tab:"+id { model.dropTarget = (info.location.y >= 8 && info.location.y <= 26 ? "split:" : info.location.y > 26 ? "after:" : "before:")+id }
+        if kind == "tab", canDrop, let token = model.dragging, token.hasPrefix("tab:"), token != "tab:"+id {
+            let source = String(token.dropFirst(4))
+            let sameSpace = model.store.state.tabs.first { $0.id == source }?.spaceId == model.store.state.tabs.first { $0.id == id }?.spaceId
+            model.dropTarget = (info.location.y >= 8 && info.location.y <= 26 ? (sameSpace ? "split:" : "before:") : info.location.y > 26 ? "after:" : "before:")+id
+        }
     }
-    func performDrop(info: DropInfo) -> Bool { performTokenDrop(y: info.location.y) }
-    func performTokenDrop(y: CGFloat) -> Bool {
-        guard canDrop else { return false }
-        defer { model.dragging = nil; model.dropTarget = nil }
-        guard let token = model.dragging else { return false }
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [derivativeDragType]).first else { return false }
+        return performProviderDrop(provider, y: info.location.y)
+    }
+    @discardableResult func performProviderDrop(_ provider: NSItemProvider, y: CGFloat) -> Bool {
+        guard provider.hasItemConformingToTypeIdentifier(derivativeDragType.identifier) else { return false }
+        provider.loadDataRepresentation(forTypeIdentifier: derivativeDragType.identifier) { data, _ in
+            guard let data, data.count <= 256, let token = String(data: data, encoding: .utf8) else { return }
+            Task { @MainActor in _ = performTokenDrop(y: y, token: token) }
+        }
+        return true
+    }
+    func performTokenDrop(y: CGFloat, token suppliedToken: String? = nil) -> Bool {
+        guard let token = suppliedToken ?? model.dragging, accepts(token) else { return false }
+        defer {
+            if model.dragging == nil || model.dragging == token { model.dragging = nil; model.dropTarget = nil }
+        }
         let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return false }
         let source = parts[1]
@@ -354,7 +397,7 @@ struct SidebarDrop: DropDelegate {
                 if model.store.currentFavorites.contains(where: { $0.id == source }) { return true }
                 return model.store.moveFavorite(source, to: model.store.state.activeSpaceId)
             }
-            if ["today", "tab"].contains(kind) { model.send("favorite.newTab", id: source); return true }
+            if ["today", "tab"].contains(kind) { model.send("favorite.toToday", id: source); return true }
             return false
         }
         if parts[0] == "tab", ["favorite", "favoriteGrid"].contains(kind), let tab = model.store.state.tabs.first(where: { $0.id == source }) {
@@ -364,7 +407,10 @@ struct SidebarDrop: DropDelegate {
         if parts[0] == "folder" && kind == "folder" { model.store.reorderFolder(source, before: id); return true }
         guard parts[0] == "tab", source != id else { return false }
         if kind == "tab", let target = model.store.state.tabs.first(where: { $0.id == id }) {
-            if y >= 8 && y <= 26 { model.send("split.open", id: source, ["withId": id]) }
+            if y >= 8 && y <= 26 {
+                guard model.store.state.tabs.first(where: { $0.id == source })?.spaceId == target.spaceId else { return false }
+                model.send("split.open", id: source, ["withId": id])
+            }
             else {
                 let siblings = model.store.state.tabs.filter { $0.id != source && $0.spaceId == target.spaceId && $0.pinned == target.pinned && $0.folderId == target.folderId }
                 let next = siblings.firstIndex { $0.id == id }.flatMap { index in siblings.indices.contains(index+1) ? siblings[index+1].id : nil }
