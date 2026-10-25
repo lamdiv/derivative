@@ -124,3 +124,10 @@ Local HTTP checks passed for a 404 conventional icon followed by declared PNG di
 A Clear action beside Today appears when the current Space has regular tabs. It preserves pinned/folder tabs, open favorite tabs, and other Spaces. Closures are serialized through the existing CEF close flow, with the active tab last to avoid loading background tabs just to close them. A cancelled before-unload close stops the remaining queue. Completed closures enter the existing thirty-item recently closed list and can be reopened with ⇧⌘T.
 
 The native build and browser feature, sidebar layout, and sidebar animation fixtures passed. The feature fixture covers clearing a split pair, protected pinned/favorite tabs, other-Space preservation, unchanged favorite collections, reopening, repeated clearing, and the empty no-op. The app was restarted. Real unsaved-change prompts and a physical click on Clear were not exercised against user tabs.
+
+
+## Favorite pages moved into Today
+
+Dragging a favorite into Today transfers its existing browser tab by clearing the favorite association and ordinary tab placement flags. The saved favorite remains unchanged and inactive. An unopened favorite creates a regular tab instead. Drag feedback advertises a move for an existing favorite page and a copy when a new page is required. Opening the saved favorite later creates/selects a favorite-owned page, without reclaiming an independent regular tab merely because its URL matches.
+
+The native build, feature fixture, tabs/profiles fixture, and sidebar layout fixture passed. Tests verify unchanged tab and loaded-page counts during transfer, retained live form contents through the same CDP target, preserved favorite metadata, correct drop feedback, unopened-favorite creation, and independent reopening. The app was restarted with this build; physical drag interaction was not separately exercised.

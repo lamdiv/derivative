@@ -330,9 +330,11 @@ struct SidebarDrop: DropDelegate {
         return true
     }
     var operation: DropOperation {
-        let favorite = model.dragging?.hasPrefix("favorite:") == true
-        let tab = model.dragging?.hasPrefix("tab:") == true
-        return (favorite && ["today", "tab"].contains(kind)) || (tab && ["favorite", "favoriteGrid"].contains(kind)) ? .copy : .move
+        if let token = model.dragging, token.hasPrefix("favorite:"), ["today", "tab"].contains(kind) {
+            let favorite = String(token.dropFirst(9))
+            return model.store.currentTabs.contains(where: { $0.favoriteId == favorite }) ? .move : .copy
+        }
+        return model.dragging?.hasPrefix("tab:") == true && ["favorite", "favoriteGrid"].contains(kind) ? .copy : .move
     }
     func dropEntered(info: DropInfo) {
         if kind == "favorite", let token = model.dragging, token.hasPrefix("favorite:") {
@@ -365,7 +367,7 @@ struct SidebarDrop: DropDelegate {
                 if model.store.currentFavorites.contains(where: { $0.id == source }) { return true }
                 return model.store.moveFavorite(source, to: model.store.state.activeSpaceId)
             }
-            if ["today", "tab"].contains(kind) { model.send("favorite.newTab", id: source); return true }
+            if ["today", "tab"].contains(kind) { model.send("favorite.toToday", id: source); return true }
             return false
         }
         if parts[0] == "tab", ["favorite", "favoriteGrid"].contains(kind), let tab = model.store.state.tabs.first(where: { $0.id == source }) {

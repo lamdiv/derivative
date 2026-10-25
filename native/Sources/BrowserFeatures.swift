@@ -112,8 +112,7 @@ import SwiftUI
         case "favorite.edit":
             let favorite = store.state.favorites.first { $0.id == id }
             prompt(favorite == nil ? "Add favorite" : "Edit favorite", fields: [("Name", favorite?.name ?? store.active?.title ?? ""), ("Website address", favorite?.url ?? store.active?.url ?? "")]) { [weak self] fields in self?.store.saveFavorite(id: favorite?.id, name: fields[0], input: fields[1]) }
-        case "favorite.newTab":
-            if let favorite = store.state.favorites.first(where: { $0.id == id }) { store.open(favorite.url); showActive() }
+        case "favorite.toToday": favoriteToToday(id)
         case "favorite.save": store.saveFavorite(id: id.isEmpty ? nil : id, name: values["name"] ?? "", input: values["url"] ?? "")
         case "favorite.delete": store.deleteFavorite(id)
         case "favorite.reorder": store.reorderFavorite(id, before: values["beforeId"])
