@@ -90,6 +90,22 @@ try {
   await waitFor(async () => !(await snapshot()).state.tabs.some(t => t.id === freshFavoriteID), 'Close reopened favorite');
   await send('closeTab', { id: openFavoriteID });
   await waitFor(async () => !(await snapshot()).state.tabs.some(t => [reopenedFavoriteID, openFavoriteID].includes(t.id)), 'Close favorite drag fixtures');
+  const pinnedFavorite = await send('drop', { token: 'favorite:'+favorite, kind: 'pinned', id: 'personal', y: 45 });
+  const pinnedFavoriteID = pinnedFavorite.state.activeTabId;
+  assert.equal(pinnedFavorite.dropOperation, 'copy');
+  assert.ok(pinnedFavorite.state.tabs.some(t => t.id === pinnedFavoriteID && t.pinned && !t.favoriteId), 'An unopened favorite can be dropped into Pinned');
+  await send('openFavorite', { id: favorite });
+  s = await snapshot(); const pinTransferID = s.state.activeTabId;
+  await send('providerDrop', { token: 'favorite:'+favorite, kind: 'tab', id: pinnedFavoriteID, y: 17 });
+  await waitFor(async () => (await snapshot()).state.tabs.some(t => t.id === pinTransferID && t.pinned && !t.favoriteId), 'Favorite drop onto a pinned row transfers its live page');
+  s = await snapshot();
+  assert.deepEqual(s.state.favorites, beforeTransfer.state.favorites);
+  assert.equal(s.splitIDs.length, 0, 'A favorite drop on a tab must transfer rather than split');
+  await send('providerDrop', { token: 'favorite:'+favorite, kind: 'today', id: 'personal', y: 450 });
+  await waitFor(async () => (await snapshot()).state.tabs.some(t => t.url === address+'/one' && !t.pinned && !t.favoriteId && !['one', pinTransferID, pinnedFavoriteID].includes(t.id)), 'The lower Today area accepts a favorite even after drag state is cleared');
+  s = await snapshot(); const todayDropID = s.state.activeTabId;
+  for (const id of [pinnedFavoriteID, pinTransferID, todayDropID]) { await send('closeTab', { id }); }
+  await waitFor(async () => !(await snapshot()).state.tabs.some(t => [pinnedFavoriteID, pinTransferID, todayDropID].includes(t.id)), 'Close broad drop fixtures');
   await send('selectTab', { id: 'one' });
   const added = await send('drop', { token: 'tab:two', kind: 'favoriteGrid' }); assert.equal(added.dropOperation, 'copy'); assert.equal(added.state.favorites.length, 3);
   await send('selectSpace', { id: 'work' }); assert.equal((await snapshot()).visibleFavoriteIDs.length, 0, 'New favorite lists must be Space-local');
