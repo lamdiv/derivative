@@ -19,6 +19,10 @@ Derivative (d) is a small, independent browser for macOS. Spaces for different p
 
 **Early development · macOS 14+ · Apple Silicon**
 
+[![Derivative demo: command search, light and dark appearance, pastel themes, and the sidebar](assets/demo/derivative.gif)](assets/demo/derivative.webm)
+
+A short recording of the native app at 1.35× speed. **[Watch WebM](assets/demo/derivative.webm)** · **[Download MP4](assets/demo/derivative.mp4)**
+
 ## A little room for everything
 
 | | |
