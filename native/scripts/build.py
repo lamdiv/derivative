@@ -20,6 +20,16 @@ CACHE = ROOT / '.cache'
 BUILD = ROOT / 'build'
 LOCK = json.loads((ROOT / 'cef.lock.json').read_text())
 
+def write_app_info(path, identifier, executable, extra=None):
+    data = {'CFBundleIdentifier': identifier, 'CFBundleExecutable': executable,
+            'CFBundleName': executable, 'CFBundleDisplayName': executable,
+            'CFBundlePackageType': 'APPL', 'CFBundleVersion': '1',
+            'CFBundleShortVersionString': '0.1.0', 'LSMinimumSystemVersion': '14.0',
+            'NSHighResolutionCapable': True,
+            'NSBluetoothAlwaysUsageDescription': 'Derivative uses Bluetooth to let you sign in to websites with a passkey on a nearby device or a Bluetooth security key.'}
+    data.update(extra or {})
+    path.write_bytes(plistlib.dumps(data))
+
 def file_hash(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -114,22 +124,14 @@ def main():
         if destination.exists(): shutil.rmtree(destination)
         run('ditto', cef / 'Release' / framework, destination)
         marker.write_text(identity)
-    def info(path, identifier, executable, extra=None):
-        data = {'CFBundleIdentifier': identifier, 'CFBundleExecutable': executable,
-                'CFBundleName': executable, 'CFBundleDisplayName': executable,
-                'CFBundlePackageType': 'APPL', 'CFBundleVersion': '1',
-                'CFBundleShortVersionString': '0.1.0', 'LSMinimumSystemVersion': '14.0',
-                'NSHighResolutionCapable': True}
-        data.update(extra or {})
-        path.write_bytes(plistlib.dumps(data))
-    info(contents / 'Info.plist', 'app.derivative.browser.native', 'Derivative',
+    write_app_info(contents / 'Info.plist', 'app.derivative.browser.native', 'Derivative',
          {'UTExportedTypeDeclarations': [{'UTTypeIdentifier': 'app.derivative.browser.item', 'UTTypeConformsTo': ['public.data'], 'UTTypeDescription': 'Derivative sidebar item'}], 'NSPrincipalClass': 'DerivativeApplication', 'CFBundleIconFile': 'Derivative.icns', 'NSCameraUsageDescription': 'Allow websites you approve to use your camera.', 'NSMicrophoneUsageDescription': 'Allow websites you approve to use your microphone.', 'NSLocationWhenInUseUsageDescription': 'Allow websites you approve to use your location.'})
     for suffix, identifier in [('', ''), (' (Alerts)', '.alerts'), (' (GPU)', '.gpu'), (' (Plugin)', '.plugin'), (' (Renderer)', '.renderer')]:
         name = 'Derivative Helper' + suffix
         helper = contents / 'Frameworks' / (name + '.app') / 'Contents'
         (helper / 'MacOS').mkdir(parents=True, exist_ok=True)
         shutil.copy2(BUILD / 'Helper', helper / 'MacOS' / name)
-        info(helper / 'Info.plist', 'app.derivative.browser.native.helper' + identifier, name, {'LSUIElement': True})
+        write_app_info(helper / 'Info.plist', 'app.derivative.browser.native.helper' + identifier, name, {'LSUIElement': True})
         sign(helper.parent)
     shutil.copy2(REPO / 'assets/icon.icns', contents / 'Resources/Derivative.icns')
     shutil.copy2(cef / 'LICENSE.txt', contents / 'Resources/ThirdParty/CEF-LICENSE.txt')

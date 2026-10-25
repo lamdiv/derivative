@@ -138,3 +138,9 @@ The native build, feature fixture, tabs/profiles fixture, and sidebar layout fix
 Split/reorder drops now load their source from the native NSItemProvider payload instead of depending on the transient sidebar drag token, which the window mouse-up monitor can clear before SwiftUI delivers the drop. The payload is bounded and validated against current state; stale or invalid tab IDs cannot create a split. Row centers still split tabs in the same Space, while row edges reorder. Native drop handlers also reject unsupported target/source combinations instead of accepting a drop with no action.
 
 The native build, feature fixture, sidebar layout fixture, and sidebar animation fixture passed. The regression creates a real registered item provider, clears presentation drag state to reproduce the race, loads the payload asynchronously through the same drop path, and verifies two live split pages. Edge reordering and invalid-payload rejection are also checked. Derivative was restarted. These checks do not constitute a physical drag review.
+
+## Sign-in Bluetooth privacy crash
+
+Three macOS crash reports identified a TCC termination caused by a missing `NSBluetoothAlwaysUsageDescription`. The app and all Chromium helper bundles now include a description explaining Bluetooth use for nearby-device passkeys and security keys. This supplies the required prompt text; it does not grant Bluetooth permission or change existing permission decisions.
+
+The packaging regression, native build, checks of all six generated Info.plists, deep signature verification, and sandboxed browsing smoke test passed. The rebuilt app was opened at the restored Google sign-in page. Account authentication and a real passkey exchange were not completed as part of verification.

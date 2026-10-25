@@ -1,5 +1,6 @@
 """Engine identity guards: a same-version custom framework must not reuse old bytes."""
 import importlib.util
+import plistlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -32,6 +33,18 @@ class EngineIdentityTests(unittest.TestCase):
     def test_incomplete_distribution_is_rejected(self):
         self.binary.unlink()
         with self.assertRaisesRegex(SystemExit, 'missing its Release framework'): build.validate_cef(self.cef)
+
+class AppBundlePrivacyTests(unittest.TestCase):
+    def test_browser_and_helpers_declare_bluetooth_purpose(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name, extra in [('Derivative', {'NSPrincipalClass': 'DerivativeApplication'}), ('Derivative Helper', {'LSUIElement': True})]:
+                with self.subTest(executable=name):
+                    path = Path(directory) / 'Info.plist'
+                    build.write_app_info(path, 'app.derivative.test', name, extra)
+                    info = plistlib.loads(path.read_bytes())
+                    self.assertTrue(info.get('NSBluetoothAlwaysUsageDescription', '').strip(), 'WebAuthn Bluetooth access must not terminate the app with a TCC privacy violation')
+                    self.assertEqual(info['CFBundleExecutable'], name)
+                    for key, value in extra.items(): self.assertEqual(info[key], value)
 
 if __name__ == '__main__':
     unittest.main()
