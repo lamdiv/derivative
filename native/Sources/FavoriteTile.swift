@@ -18,6 +18,9 @@ struct FavoriteTile: View {
             .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "favorite", id: favorite.id))
             .contextMenu {
                 Button("Open") { model.openFavorite(favorite.id) }
+                if model.store.currentTabs.contains(where: { $0.favoriteId == favorite.id }) {
+                    Button("Close Tab") { model.send("favorite.close", id: favorite.id) }
+                }
                 Button("Edit favorite") { model.send("favorite.edit", id: favorite.id) }
                 Button("Copy address") { model.send("copy", id: favorite.url) }
                 Menu("Move to Space") {
