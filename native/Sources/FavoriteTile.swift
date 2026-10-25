@@ -7,25 +7,14 @@ struct FavoriteTile: View {
     private var active: Bool { model.store.active?.favoriteId == favorite.id }
     private var opened: Bool { model.store.currentTabs.contains { $0.favoriteId == favorite.id } }
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Button { model.openFavorite(favorite.id) } label: {
-                SiteIcon(url: favorite.url, title: favorite.name, size: 23)
-                    .frame(maxWidth: .infinity).frame(height: 43)
-                    .sidebarItemGlass(model, radius: 12, selected: active, hovered: hovered)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
-            }.buttonStyle(SidebarImmediateButtonStyle()).help(favorite.name).accessibilityLabel("Open favorite "+favorite.name)
-                .accessibilityValue(active ? "Active tab" : opened ? "Tab open" : "Not open")
-                .onDrag { hovered = false; return model.provider("favorite:"+favorite.id) }
-            if opened {
-                Menu { actions } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(model.ink.opacity(0.8))
-                        .frame(width: 22, height: 20).contentShape(Rectangle())
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .help("Favorite options").accessibilityLabel("Options for favorite "+favorite.name)
-                    .padding(2)
-            }
-        }
+        Button { model.openFavorite(favorite.id) } label: {
+            SiteIcon(url: favorite.url, title: favorite.name, size: 23)
+                .frame(maxWidth: .infinity).frame(height: 43)
+                .sidebarItemGlass(model, radius: 12, selected: active, hovered: hovered)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }.buttonStyle(SidebarImmediateButtonStyle()).help(favorite.name).accessibilityLabel("Open favorite "+favorite.name)
+            .accessibilityValue(active ? "Active tab" : opened ? "Tab open" : "Not open")
+            .onDrag { hovered = false; return model.provider("favorite:"+favorite.id) }
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(model.accent.opacity(active ? 0.95 : opened ? 0.55 : 0), lineWidth: active ? 2 : 1)

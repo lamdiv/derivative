@@ -124,18 +124,19 @@ struct SidebarView: View {
                             Spacer()
                             Menu { Button("New folder") { model.send("folder.create") }; Button("Rename Space") { model.send("space.rename", id: model.store.space.id) }; Button("Space settings") { model.settingsSection = "Spaces"; model.send("settings") } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
                         }.padding(.vertical, 6)
-                        groupLabel("Pinned", pinned: true)
-                        if splitAnchor?.pinned == true && splitAnchor?.folderId == nil { NativeSplitGroup(model: model) }
-                        ForEach(visibleTabs.filter { $0.pinned && $0.folderId == nil }) { NativeTabRow(model: model, tab: $0) }
-                        ForEach(model.store.state.folders.filter { $0.spaceId == model.store.state.activeSpaceId }) { folder in FolderRow(model: model, folder: folder) }
+                        VStack(alignment: .leading, spacing: 5) {
+                            groupLabel("Pinned", pinned: true)
+                            if splitAnchor?.pinned == true && splitAnchor?.folderId == nil { NativeSplitGroup(model: model) }
+                            ForEach(visibleTabs.filter { $0.pinned && $0.folderId == nil }) { NativeTabRow(model: model, tab: $0) }
+                            ForEach(model.store.state.folders.filter { $0.spaceId == model.store.state.activeSpaceId }) { folder in FolderRow(model: model, folder: folder) }
+                        }.frame(maxWidth: .infinity, minHeight: 55, alignment: .topLeading).contentShape(Rectangle())
+                            .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "pinned", id: model.store.state.activeSpaceId))
                         Divider().opacity(0.25).padding(.vertical, 4)
                         VStack(alignment: .leading, spacing: 5) {
                             groupLabel("Today", pinned: false)
                             if splitAnchor?.pinned == false { NativeSplitGroup(model: model) }
                             ForEach(visibleTabs.filter { !$0.pinned }) { NativeTabRow(model: model, tab: $0) }
-                            if model.dragging?.hasPrefix("favorite:") == true {
-                                Label("Open as regular tab", systemImage: "plus").font(.system(size: 11)).foregroundStyle(.secondary).padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                            } else if model.store.active != nil && model.store.active?.favoriteId == nil {
+                            if model.store.active != nil && model.store.active?.favoriteId == nil {
                                 Button(action: model.newSearch) {
                                     Label("New tab", systemImage: "plus").font(.system(size: 12))
                                         .foregroundStyle(newTabHovered ? model.ink : model.ink.opacity(0.5))
@@ -162,6 +163,8 @@ struct SidebarView: View {
                         }
                     }
             }.scrollIndicators(.hidden)
+                .contentShape(Rectangle())
+                .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "today", id: model.store.state.activeSpaceId))
                 .background(SidebarSpaceCaptureAnchor(identifier: "sidebar-space-viewport").allowsHitTesting(false))
                 .overlay(alignment: .bottom) {
                     if let edge = model.swipeEdge {
@@ -330,7 +333,9 @@ struct SidebarDrop: DropDelegate {
             guard let favorite = model.store.state.favorites.first(where: { $0.id == source }) else { return false }
             if kind == "space" { return favorite.spaceId != id && model.store.state.spaces.contains { $0.id == id } && model.store.favorites(in: id).count < 12 }
             if ["favorite", "favoriteGrid"].contains(kind) { return favorite.spaceId == model.store.state.activeSpaceId || model.store.currentFavorites.count < 12 }
-            return kind == "today" || (kind == "tab" && model.store.state.tabs.first { $0.id == id }?.pinned == false)
+            if kind == "tab" { return model.store.currentTabs.contains { $0.id == id } }
+            if kind == "folder" { return model.store.state.folders.contains { $0.id == id && $0.spaceId == model.store.state.activeSpaceId } }
+            return ["today", "pinned"].contains(kind)
         case "tab":
             guard let tab = model.store.state.tabs.first(where: { $0.id == source }) else { return false }
             if ["favorite", "favoriteGrid"].contains(kind) { return model.store.currentFavorites.count < 12 }
@@ -344,7 +349,7 @@ struct SidebarDrop: DropDelegate {
         }
     }
     var operation: DropOperation {
-        if let token = model.dragging, token.hasPrefix("favorite:"), ["today", "tab"].contains(kind) {
+        if let token = model.dragging, token.hasPrefix("favorite:"), ["today", "pinned", "folder", "tab"].contains(kind) {
             let favorite = String(token.dropFirst(9))
             return model.store.currentTabs.contains(where: { $0.favoriteId == favorite }) ? .move : .copy
         }
@@ -373,6 +378,7 @@ struct SidebarDrop: DropDelegate {
     }
     func performDrop(info: DropInfo) -> Bool {
         guard let provider = info.itemProviders(for: [derivativeDragType]).first else { return false }
+        if let token = model.dragging, accepts(token) { return performTokenDrop(y: info.location.y, token: token) }
         return performProviderDrop(provider, y: info.location.y)
     }
     @discardableResult func performProviderDrop(_ provider: NSItemProvider, y: CGFloat) -> Bool {
@@ -397,7 +403,12 @@ struct SidebarDrop: DropDelegate {
                 if model.store.currentFavorites.contains(where: { $0.id == source }) { return true }
                 return model.store.moveFavorite(source, to: model.store.state.activeSpaceId)
             }
-            if ["today", "tab"].contains(kind) { model.send("favorite.toToday", id: source); return true }
+            if kind == "tab", let target = model.store.currentTabs.first(where: { $0.id == id }) {
+                model.send("favorite.toToday", id: source, ["pinned": String(target.pinned), "folderId": target.folderId ?? "", "beforeId": target.id]); return true
+            }
+            if ["today", "pinned", "folder"].contains(kind) {
+                model.send("favorite.toToday", id: source, ["pinned": String(kind != "today"), "folderId": kind == "folder" ? id : ""]); return true
+            }
             return false
         }
         if parts[0] == "tab", ["favorite", "favoriteGrid"].contains(kind), let tab = model.store.state.tabs.first(where: { $0.id == source }) {

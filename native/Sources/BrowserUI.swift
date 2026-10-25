@@ -277,12 +277,15 @@ import QuartzCore
             store.state.tabs[index].favoriteId = id; selectTab(store.state.tabs[index].id)
         } else { store.open(favorite.url, favoriteId: id); showActive() }
     }
-    func favoriteToToday(_ id: String) {
+    func favoriteToToday(_ id: String, pinned: Bool = false, folder: String? = nil, before: String? = nil) {
         guard let favorite = store.state.favorites.first(where: { $0.id == id }) else { return }
+        if let folder, !store.state.folders.contains(where: { $0.id == folder && $0.spaceId == store.state.activeSpaceId }) { return }
         if let tab = store.currentTabs.first(where: { $0.favoriteId == id }) {
-            store.placeTab(tab.id, space: tab.spaceId, pinned: false)
+            store.placeTab(tab.id, space: tab.spaceId, pinned: pinned, folder: folder, before: before)
             store.select(tab.id)
-        } else { store.open(favorite.url) }
+        } else if let tabID = store.open(favorite.url) {
+            store.placeTab(tabID, space: store.state.activeSpaceId, pinned: pinned, folder: folder, before: before)
+        }
         showActive()
     }
     func updateSidebarHover(_ point: NSPoint) {
