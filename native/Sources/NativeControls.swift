@@ -36,6 +36,7 @@ struct BrowserDownload: Identifiable {
     @Published var downloadsExpanded = false
     @Published var siteControlsOpen = false
     @Published var pageZoom = 100
+    @Published var zoomIndicatorVisible = false
     @Published var clearingTabs = false
     @Published var settingsSection = "Appearance"
     @Published var newSpaceName = ""

@@ -137,6 +137,10 @@ try {
   assert.equal((await snapshot()).siteControlsOpen, true);
   assert.deepEqual((await snapshot()).pageBounds, controlsBefore.pageBounds, 'Site controls must not resize the webpage');
   await send('page.zoom', { percent: '150' });
+  const zoomFeedback = await snapshot();
+  assert.equal(zoomFeedback.zoomIndicatorVisible, true, 'Zoom must immediately show its percentage');
+  assert.equal(zoomFeedback.zoomIndicatorInterceptsClicks, false, 'Zoom feedback must not block webpage clicks');
+  assert.deepEqual(zoomFeedback.pageBounds, controlsBefore.pageBounds, 'Zoom feedback must not move the page');
   await waitFor(async () => (await snapshot()).pageZoom === 150 && await first.evaluate(() => innerWidth) < initialViewport, 'Page zoom must change actual Chromium viewport scaling');
   for (const [input, expected] of [['999', 300], ['-20', 25], ['100', 100]]) {
     await send('page.zoom', { percent: input });
@@ -158,8 +162,14 @@ try {
   await chromiumZoom(187, false, 110);
   await chromiumZoom(187, true, 125);
   assert.ok(await first.evaluate(() => innerWidth) < initialViewport, 'Keyboard zoom must scale the actual webpage');
+  await waitFor(async () => !(await snapshot()).zoomIndicatorVisible, 'Zoom feedback must dismiss automatically after the last change');
   await chromiumZoom(189, false, 110);
   await chromiumZoom(48, false, 100);
+  await send('page.zoom', { percent: '100' });
+  assert.equal((await snapshot()).zoomIndicatorVisible, true, 'Resetting zoom also shows feedback');
+  await send('selectTab', { id: 'two' });
+  assert.equal((await snapshot()).zoomIndicatorVisible, false, 'Tab changes dismiss the previous tab’s zoom feedback');
+  await send('selectTab', { id: 'one' });
   assert.equal((await send('chromiumKey', { code: 187, command: false })).keyHandled, false);
   await send('page.mute', { muted: 'true' }); await waitFor(async () => (await snapshot()).pageMuted, 'Mute did not reach Chromium');
   await send('selectTab', { id: 'two' }); assert.equal((await snapshot()).pageMuted, false, 'Mute must belong to the selected tab');
