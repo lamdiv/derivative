@@ -63,6 +63,7 @@ import Foundation
                 titlebar?.layoutSubtreeIfNeeded()
                 NSApp.updateWindows()
             case "revealSidebar": controller.setRevealed(command["visible"] as? Bool ?? true)
+            case "sidebarHover": controller.updateSidebarHover(NSPoint(x: command["x"] as? Double ?? 0, y: command["y"] as? Double ?? 100))
             case "sidebarSize":
                 controller.store.state.preferences.sidebarSize = id
                 controller.store.state.preferences.customSidebarWidth = nil

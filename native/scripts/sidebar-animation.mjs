@@ -21,20 +21,27 @@ try {
   assert.equal((await snapshot()).searchBounds.y, searching.searchBounds.y, 'Search position must stay anchored as results change');
   await send('dismissSearch');
   assert.equal((await snapshot()).homeVisible, true);
-  await send('toggleSidebar');
-  await send('toggleSidebar');
-  await waitFor(async () => { const s = await snapshot(); return !s.sidebarTransitioning && s.sidebarVisible; }, 'Interrupted pin animation must end visible');
-  await send('toggleSidebar');
-  await waitFor(async () => !(await snapshot()).sidebarVisible, 'Sidebar should slide closed');
-  const closed = await snapshot();
-  await send('revealSidebar');
-  await new Promise(resolve => setTimeout(resolve, 60));
-  const during = await snapshot(); assert.deepEqual(during.pageBounds, closed.pageBounds, 'Floating animation cannot resize the page');
-  assert.ok(during.sidebarPresentationX < 8 && during.sidebarPresentationX > -during.sidebarBounds.width, 'Sidebar must visibly pass through intermediate positions: '+JSON.stringify({x:during.sidebarPresentationX,frame:during.sidebarBounds,transitioning:during.sidebarTransitioning}));
-  await send('revealSidebar', { visible: false });
-  await send('revealSidebar', { visible: true });
-  await waitFor(async () => { const s = await snapshot(); return s.sidebarVisible && !s.sidebarTransitioning; }, 'Stale hide completion must not hide a reopened sidebar');
-  assert.deepEqual((await snapshot()).pageBounds, closed.pageBounds);
+  for (const sidebarSide of ['left', 'right']) {
+    await send('preferences', { sidebarSide, sidebarMode: 'fixed' });
+    await send('toggleSidebar');
+    await send('toggleSidebar');
+    await waitFor(async () => { const s = await snapshot(); return !s.sidebarTransitioning && s.sidebarVisible; }, 'Interrupted pin animation must end visible');
+    await send('toggleSidebar');
+    await waitFor(async () => !(await snapshot()).sidebarVisible, 'Sidebar should slide closed');
+    const closed = await snapshot();
+    await send('revealSidebar');
+    await new Promise(resolve => setTimeout(resolve, 60));
+    const during = await snapshot(); assert.deepEqual(during.pageBounds, closed.pageBounds, 'Floating animation cannot resize the page');
+    const visibleX = during.sidebarBounds.x;
+    const intermediate = sidebarSide === 'right'
+      ? during.sidebarPresentationX > visibleX && during.sidebarPresentationX < during.rootBounds.width
+      : during.sidebarPresentationX < 8 && during.sidebarPresentationX > -during.sidebarBounds.width;
+    assert.ok(intermediate, 'Sidebar must visibly pass through intermediate positions on '+sidebarSide+': '+JSON.stringify({x:during.sidebarPresentationX,frame:during.sidebarBounds,transitioning:during.sidebarTransitioning}));
+    await send('revealSidebar', { visible: false });
+    await send('revealSidebar', { visible: true });
+    await waitFor(async () => { const s = await snapshot(); return s.sidebarVisible && !s.sidebarTransitioning; }, 'Stale hide completion must not hide a reopened sidebar');
+    assert.deepEqual((await snapshot()).pageBounds, closed.pageBounds);
+  }
   const exited = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error(logs)), 10000); app.once('exit', () => { clearTimeout(timer); resolve(); }); });
   await send('quit'); await exited; assert.equal(app.exitCode, 0, logs);
   console.log('PASS: sliding intermediate positions, rapid reveal/hide reversal, stable webpage bounds, and new-tab search promotion with history only after typing.');

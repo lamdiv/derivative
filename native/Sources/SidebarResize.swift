@@ -18,7 +18,9 @@ import AppKit
     override func mouseUp(with event: NSEvent) { resize(event, finished: true); origin = nil }
     private func resize(_ event: NSEvent, finished: Bool) {
         guard let origin else { return }
-        controller?.resizeSidebar(rawWidth: origin.width + event.locationInWindow.x-origin.x, finished: finished)
+        guard let controller else { return }
+        let direction: CGFloat = controller.store.state.preferences.sidebarOnRight ? -1 : 1
+        controller.resizeSidebar(rawWidth: origin.width + (event.locationInWindow.x-origin.x)*direction, finished: finished)
     }
 }
 

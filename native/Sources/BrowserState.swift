@@ -43,6 +43,8 @@ struct BrowserPreferences: Codable, Equatable {
     var theme = "system"
     var sidebarMode = "fixed"
     var sidebarSize = "comfortable"
+    var sidebarSide: String? = nil
+    var sidebarOnRight: Bool { sidebarSide == "right" }
     var customSidebarWidth: Double? = nil
     var restoreSession = true
     var searchEngine = "google"
@@ -141,6 +143,7 @@ struct SavedBrowserState: Codable, Equatable {
         if !["system", "light", "dark"].contains(preferences.theme) { preferences.theme = "system" }
         if !["fixed", "hover", "hidden"].contains(preferences.sidebarMode) { preferences.sidebarMode = "fixed" }
         if !["compact", "comfortable", "wide"].contains(preferences.sidebarSize) { preferences.sidebarSize = "comfortable" }
+        if let side = preferences.sidebarSide, !["left", "right"].contains(side) { preferences.sidebarSide = nil }
         if let width = preferences.customSidebarWidth, !width.isFinite || width < Double(SidebarSizing.minimum) { preferences.customSidebarWidth = nil }
         if !["google", "duckduckgo"].contains(preferences.searchEngine) { preferences.searchEngine = "google" }
     }
