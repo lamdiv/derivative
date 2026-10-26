@@ -6,6 +6,10 @@
 <p align="center">A little space for a curious internet.</p>
 <p align="center"><strong>A native macOS browser, powered by Chromium.</strong><br />Inspired by the little things that made Arc feel like home.</p>
 <p align="center">
+  <strong><a href="https://github.com/lamdiv/derivative/releases/download/v0.1.0-preview.1/Derivative-0.1.0-preview.1-macos-arm64.dmg">Download for macOS</a></strong><br />
+  Apple Silicon · macOS 14+ · v0.1.0-preview.1 · Unnotarized preview
+</p>
+<p align="center">
   <a href="#get-started">Get started</a> ·
   <a href="https://derivativebrowser.com">Website</a> ·
   <a href="native/README.md">Build guide</a> ·
@@ -41,7 +45,7 @@ The interface is built with **SwiftUI and AppKit**. Websites run in **Chromium t
 
 ## Get started
 
-**[Download the macOS preview](https://github.com/lamdiv/derivative/releases)** for Apple Silicon, macOS 14 or later. Open the DMG and drag **Derivative** to **Applications**. Release assets include a ZIP alternative and SHA-256 checksums.
+**[Download the macOS preview (.dmg)](https://github.com/lamdiv/derivative/releases/download/v0.1.0-preview.1/Derivative-0.1.0-preview.1-macos-arm64.dmg)** for Apple Silicon, macOS 14 or later. Open the DMG and drag **Derivative** to **Applications**. Find the ZIP alternative, SHA-256 checksums, and release notes on the **[release page](https://github.com/lamdiv/derivative/releases/tag/v0.1.0-preview.1)**.
 
 The preview is **ad-hoc signed and not notarized**. macOS may block the first launch. Only open a download you trust; see [Apple's instructions](https://support.apple.com/102445) for the **Privacy & Security → Open Anyway** option. Automatic updates are not available yet; download new versions from Releases.
 
