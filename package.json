@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "python3 native/scripts/build.py",
+    "package": "python3 native/scripts/package.py",
     "start": "open native/build/Derivative.app",
     "test": "npm run test:state && npm run test:engine && npm run test:favicons",
     "test:state": "mkdir -p native/build && xcrun swiftc -swift-version 5 -module-cache-path native/.cache/swift-modules native/Sources/BrowserState.swift native/Sources/Organization.swift native/Sources/FavoriteLayout.swift native/Tests/StateTests.swift -o native/build/state-tests && native/build/state-tests",
