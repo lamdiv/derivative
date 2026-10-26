@@ -35,7 +35,7 @@ Music: “Bossa Antigua” by Kevin MacLeod, licensed under CC BY 4.0. [Soundtra
 | **Search, one shortcut away** | Press **⌘T**, type, and confirm. A new tab opens when you're ready. |
 | **Tabs that stay tidy** | Pin tabs, make folders, or clear Today while keeping pinned tabs and favorites. |
 | **Two pages together** | Drag one tab onto another for a live, resizable split view. |
-| **A little personality** | Lilac, mint, peach, sky, and rose palettes, with light, dark, and system appearance. |
+| **A little personality** | Soft lilac, mint, peach, sky, rose, butter, and cloud palettes, with light, dark, and system appearance. |
 
 The interface is built with **SwiftUI and AppKit**. Websites run in **Chromium through CEF**. Liquid Glass is available on macOS 26+, with a frosted fallback on earlier systems.
 

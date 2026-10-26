@@ -91,9 +91,9 @@ struct SettingsView: View {
                     ForEach(SpacePalette.all) { palette in
                         Button { model.send("space.color", id: model.store.space.id, ["color": palette.id]) } label: {
                             VStack(spacing: 7) {
-                                RoundedRectangle(cornerRadius: 10).fill(LinearGradient(colors: [palette.sidebar(dark: model.dark), palette.accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                RoundedRectangle(cornerRadius: 10).fill(LinearGradient(colors: [palette.sidebar(dark: model.dark), palette.surface(dark: model.dark)], startPoint: .topLeading, endPoint: .bottomTrailing))
                                     .frame(height: 40)
-                                    .overlay { if model.store.space.color == palette.id { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.black.opacity(0.65)) } }
+                                    .overlay { if model.store.space.color == palette.id { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(model.ink) } }
                                 Text(palette.name).font(.system(size: 10, weight: .medium))
                             }.padding(6).frame(maxWidth: .infinity)
                                 .background(model.store.space.color == palette.id ? model.wash : .clear, in: RoundedRectangle(cornerRadius: 13))

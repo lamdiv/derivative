@@ -149,7 +149,7 @@ import SwiftUI
             else if let space = store.state.spaces.first(where: { $0.id == id }) { prompt("Rename Space", fields: [("Space name", space.name)]) { [weak self] in self?.store.renameSpace(id, name: $0[0]) } }
         case "space.create": store.createSpace(name: values["name"] ?? "", color: values["color"] ?? "lavender", icon: values["icon"] ?? "✳")
         case "space.delete": store.deleteSpace(id); showActive()
-        case "space.color": if let index = store.state.spaces.firstIndex(where: { $0.id == id }), let color = values["color"], ["lavender", "mint", "peach", "blue", "blush"].contains(color) { store.state.spaces[index].color = color; store.persist(); applyPreferences() }
+        case "space.color": if let index = store.state.spaces.firstIndex(where: { $0.id == id }), let color = values["color"], SpacePalette.all.contains(where: { $0.id == color }) { store.state.spaces[index].color = color; store.persist(); applyPreferences() }
         case "space.reorder": store.reorderSpace(id, before: values["beforeId"] ?? "")
         case "split.open":
             guard let base = store.state.tabs.first(where: { $0.id == (values["withId"] ?? store.state.activeTabId) }), let other = store.state.tabs.first(where: { $0.id == id }), base.id != id, base.spaceId == other.spaceId else { return }
