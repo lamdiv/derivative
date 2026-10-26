@@ -23,6 +23,8 @@ Derivative (d) is a small, independent browser for macOS. Spaces for different p
 
 A native app tour starting in light mode, with on-screen shortcut labels. Favorites, search, split view, sidebar toggling and left/right placement, Spaces, themes, zoom, and downloads. Edited at 1.15× speed; the GIF is a shorter preview. **[Watch WebM](assets/demo/derivative.webm)** · **[Download MP4](assets/demo/derivative.mp4)**
 
+Music: “Bossa Antigua” by Kevin MacLeod, licensed under CC BY 4.0. [Soundtrack credits](assets/demo/CREDITS.md).
+
 ## A little room for everything
 
 | | |
