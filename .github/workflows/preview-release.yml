@@ -1,0 +1,62 @@
+name: macOS preview release
+
+on:
+  push:
+    tags: ['v*-preview.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Build and package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$(uname -m)" = arm64
+          python3 native/scripts/package.py --version "${RELEASE_TAG#v}"
+      - name: Verify installed copy
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          output="$PWD/release/$version"
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/installer" "$output/Derivative-$version-macos-arm64.dmg"
+          trap 'hdiutil detach "$RUNNER_TEMP/installer"' EXIT
+          codesign --verify --deep --strict "$RUNNER_TEMP/installer/Derivative.app"
+          ditto "$RUNNER_TEMP/installer/Derivative.app" "$RUNNER_TEMP/installed/Derivative.app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/installed/Derivative.app"
+          ditto -x -k "$output/Derivative-$version-macos-arm64.zip" "$RUNNER_TEMP/unzipped"
+          codesign --verify --deep --strict "$RUNNER_TEMP/unzipped/Derivative.app"
+          npm ci
+          DERIVATIVE_NATIVE_APP="$RUNNER_TEMP/installed/Derivative.app" npm run test:browser
+          cd "$output"
+          shasum -a 256 -c SHA256SUMS
+      - name: Publish preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --title "Derivative $version" --notes-file docs/preview-release.md
+          gh release upload "$RELEASE_TAG" "release/$version/"*
+          gh release edit "$RELEASE_TAG" --draft=false
