@@ -65,6 +65,11 @@ try {
       const select = snapshot.sidebarControls.find(c => c.label === 'sidebar-tab-select:one')?.bounds;
       const close = snapshot.sidebarControls.find(c => c.label === 'sidebar-tab-close:one')?.bounds;
       assert.ok(select && close, 'Tab select and close hit regions must exist');
+      const drag = snapshot.tabDragSurfaces.find(surface => surface.id === 'one');
+      assert.ok(drag, 'A regular tab must expose a native drag and drop surface');
+      // With twelve favorites the row is below the scroll viewport in the
+      // shortest windows. Check physical hits only while the row is visible.
+      if (height >= 800) assert.deepEqual(drag.hitRegions, [true, true, true], 'Icon, title, and trailing tab space must all receive native drag events: '+JSON.stringify(drag));
       near(select.x, snapshot.sidebarBounds.x+14, 'Tab selection includes the left inset');
       near(select.width+close.width, width-28, 'The entire tab row must be covered by button targets');
       near(select.x+select.width, close.x, 'No unclickable gap before the close button');
@@ -165,6 +170,7 @@ try {
   await command(driver, 'resize', { width: 1280, height: 840 });
   let right = await command(driver, 'preferences', { sidebarSide: 'right', sidebarMode: 'fixed', sidebarSize: 'comfortable' });
   header(right);
+  assert.deepEqual(right.tabDragSurfaces.find(surface => surface.id === 'one')?.hitRegions, [true, true, true], 'Right-side tab rows must receive native drag input');
   near(right.sidebarBounds.x, 1280-288-8, 'Right sidebar sits inside the right edge');
   near(right.pageBounds.x, 8, 'Page retains the left outer inset');
   near(right.pageBounds.x+right.pageBounds.width+8, right.sidebarBounds.x, 'Fixed right sidebar reserves an eight-point page gap');

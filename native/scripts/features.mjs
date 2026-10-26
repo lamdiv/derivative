@@ -207,6 +207,13 @@ try {
   await send('tab.place', { id: 'two', pinned: 'false' });
   await send('providerDrop', { token: 'tab:missing', kind: 'tab', id: 'one', y: 17 });
   assert.equal((await snapshot()).splitIDs.length, 0, 'Invalid provider payloads cannot split');
+  for (const y of [6, 28]) {
+    await send('providerDrop', { token: 'tab:two', kind: 'tab', id: 'one', y });
+    await waitFor(async () => (await snapshot()).splitIDs.join(',') === 'one,two', 'The wider central drop zone must split at y='+y);
+    await send('split.close');
+  }
+  await send('providerDrop', { token: 'tab:two', kind: 'tab', id: 'one', y: 31 });
+  assert.equal((await snapshot()).splitIDs.length, 0, 'The bottom edge must still reorder instead of splitting');
 
   const initialSearch = await send('search');
   await send('searchQuery', { query: 'nothing matches this phrase' });
