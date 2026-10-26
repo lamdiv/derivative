@@ -160,7 +160,8 @@ import Foundation
                 "sidebarResizeBounds": rect(controller.sidebarResizeHandle.frame), "sidebarResizeHidden": controller.sidebarResizeHandle.isHidden,
                 "sidebarResizeHitTarget": controller.root.hitTest(NSPoint(x: controller.sidebarResizeHandle.frame.midX, y: controller.sidebarResizeHandle.frame.midY)) === controller.sidebarResizeHandle,
                 "sidebarResizing": controller.sidebarResizing, "pageCornerRadius": controller.pageHost.layer?.cornerRadius ?? 0,
-                "sidebarControls": controls(in: controller.sidebar, controller: controller), "windowButtons": buttons
+                "sidebarControls": controls(in: controller.sidebar, controller: controller),
+                "tabDragSurfaces": tabDragSurfaces(in: controller.sidebar, controller: controller), "windowButtons": buttons
             ]
             let result = directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of: ".command.json", with: ".result.json"))
             if let data = try? JSONSerialization.data(withJSONObject: reply) { try? data.write(to: result, options: .atomic) }
@@ -169,6 +170,25 @@ import Foundation
     }
     private func rect(_ value: NSRect) -> [String: CGFloat] {
         ["x": value.minX, "y": value.minY, "width": value.width, "height": value.height]
+    }
+    private func tabDragSurfaces(in view: NSView, controller: BrowserController) -> [[String: Any]] {
+        guard !view.isHidden else { return [] }
+        var result: [[String: Any]] = []
+        if let surface = view as? TabDragView {
+            let points = [NSPoint(x: 2, y: surface.bounds.midY),
+                          NSPoint(x: surface.bounds.midX, y: surface.bounds.midY),
+                          NSPoint(x: surface.bounds.maxX-2, y: surface.bounds.midY)]
+            result.append(["id": surface.tabID, "width": surface.bounds.width, "height": surface.bounds.height,
+                           "hitClasses": points.map { point in
+                let local = controller.root.convert(point, from: surface)
+                return controller.root.hitTest(controller.root.convert(local, to: controller.root.superview)).map { String(describing: type(of: $0)) } ?? "none"
+            }, "hitRegions": points.map { point in
+                let local = controller.root.convert(point, from: surface)
+                return controller.root.hitTest(controller.root.convert(local, to: controller.root.superview)) === surface
+            }])
+        }
+        for child in view.subviews { result += tabDragSurfaces(in: child, controller: controller) }
+        return result
     }
     private func controls(in view: NSView, controller: BrowserController) -> [[String: Any]] {
         var result: [[String: Any]] = []

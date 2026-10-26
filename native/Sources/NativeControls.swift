@@ -268,6 +268,7 @@ struct NativeTabRow: View {
                 }.padding(.leading, 10).frame(maxWidth: .infinity).frame(height: 34).contentShape(Rectangle())
                     .background { if ProcessInfo.processInfo.environment["DERIVATIVE_NATIVE_TEST_DIRECTORY"] != nil { SidebarLayoutProbe(id: "sidebar-tab-select:"+tab.id).allowsHitTesting(false) } }
             }.accessibilityLabel("Select tab \(tab.title)")
+                .overlay { TabDragSurface(model: model, tabID: tab.id).accessibilityHidden(true) }
             Button { model.closeTab(tab.id) } label: {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
                     .foregroundStyle(closeHovered ? model.ink : model.ink.opacity(0.5))
@@ -284,7 +285,6 @@ struct NativeTabRow: View {
             if model.dropTarget == "before:"+tab.id { VStack { Capsule().fill(model.accent).frame(height: 2); Spacer() }.allowsHitTesting(false) }
             if model.dropTarget == "after:"+tab.id { VStack { Spacer(); Capsule().fill(model.accent).frame(height: 2) }.allowsHitTesting(false) }
         }
-        .onDrag { model.provider("tab:"+tab.id) }
         .onDrop(of: [derivativeDragType], delegate: SidebarDrop(model: model, kind: "tab", id: tab.id))
         .contextMenu {
             Button(tab.pinned ? "Unpin tab" : "Pin tab") { model.pin(tab.id) }
@@ -370,11 +370,15 @@ struct SidebarDrop: DropDelegate {
     func dropUpdated(info: DropInfo) -> DropProposal? { update(info); return DropProposal(operation: operation) }
     func dropExited(info: DropInfo) { model.dropTarget = nil }
     private func update(_ info: DropInfo) {
-        if kind == "space", model.dragging?.hasPrefix("favorite:") == true { model.dropTarget = "space:"+id }
+        updateTarget(y: info.location.y)
+    }
+    func updateTarget(y: CGFloat) {
+        if kind == "space", model.dragging?.hasPrefix("favorite:") == true, model.dropTarget != "space:"+id { model.dropTarget = "space:"+id }
         if kind == "tab", canDrop, let token = model.dragging, token.hasPrefix("tab:"), token != "tab:"+id {
             let source = String(token.dropFirst(4))
             let sameSpace = model.store.state.tabs.first { $0.id == source }?.spaceId == model.store.state.tabs.first { $0.id == id }?.spaceId
-            model.dropTarget = (info.location.y >= 8 && info.location.y <= 26 ? (sameSpace ? "split:" : "before:") : info.location.y > 26 ? "after:" : "before:")+id
+            let target = (y >= 6 && y <= 28 ? (sameSpace ? "split:" : "before:") : y > 28 ? "after:" : "before:")+id
+            if model.dropTarget != target { model.dropTarget = target }
         }
     }
     func performDrop(info: DropInfo) -> Bool {
@@ -419,7 +423,7 @@ struct SidebarDrop: DropDelegate {
         if parts[0] == "folder" && kind == "folder" { model.store.reorderFolder(source, before: id); return true }
         guard parts[0] == "tab", source != id else { return false }
         if kind == "tab", let target = model.store.state.tabs.first(where: { $0.id == id }) {
-            if y >= 8 && y <= 26 {
+            if y >= 6 && y <= 28 {
                 guard model.store.state.tabs.first(where: { $0.id == source })?.spaceId == target.spaceId else { return false }
                 model.send("split.open", id: source, ["withId": id])
             }
