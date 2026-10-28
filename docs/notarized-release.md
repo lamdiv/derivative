@@ -2,6 +2,10 @@ A signed and notarized macOS preview of Derivative, with Spaces, per-Space favor
 
 **Apple Silicon · macOS 14 or later.**
 
+### Redesigned installer
+
+The DMG opens with a pastel drag-to-install layout: Derivative on the left, a clear arrow, and Applications on the right. No Read Me file or extra visible files. The browser app and ZIP are unchanged from v0.1.0-preview.2; only the installer was repackaged, signed, and notarized again.
+
 ### Install
 
 1. Download the `.dmg` below and open it.
