@@ -15,7 +15,7 @@ open "native/build/Derivative.app"
 
 The first build downloads an approximately 135 MB official CEF archive and installs pinned CMake/Ninja versions in an isolated Python environment. `cef.lock.json` pins the framework and checksums. Dependencies and generated bundles are ignored by Git.
 
-The signed app is assembled in a repository-specific temporary directory and linked from `native/build/Derivative.app`. This avoids File Provider metadata interfering with signing in synced Desktop folders. Rebuild if temporary files are purged. Development signing is ad hoc; distribution requires Developer ID signing and notarization.
+The signed app is assembled in a repository-specific temporary directory and linked from `native/build/Derivative.app`. This avoids File Provider metadata interfering with signing in synced Desktop folders. Rebuild if temporary files are purged. Development signing is ad hoc. The public v0.1.0-preview.3 download is Developer ID signed and notarized; see the [distribution guide](../docs/releases.md) for the release signing process.
 
 ## Video compatibility and engine builds
 

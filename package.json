@@ -14,7 +14,7 @@
     "start": "open native/build/Derivative.app",
     "test": "npm run test:state && npm run test:engine && npm run test:favicons",
     "test:state": "mkdir -p native/build && xcrun swiftc -swift-version 5 -module-cache-path native/.cache/swift-modules native/Sources/BrowserState.swift native/Sources/Organization.swift native/Sources/FavoriteLayout.swift native/Tests/StateTests.swift -o native/build/state-tests && native/build/state-tests",
-    "test:engine": "python3 native/Tests/EngineBuildTests.py",
+    "test:engine": "python3 native/Tests/EngineBuildTests.py && python3 native/Tests/ReleaseSigningTests.py",
     "test:browser": "node native/scripts/verify.mjs",
     "test:integration": "node native/scripts/verify.mjs && node native/scripts/tabs-profiles.mjs && node native/scripts/sidebar-layout.mjs && node native/scripts/sidebar-animation.mjs && node native/scripts/features.mjs && node native/scripts/context-menu.mjs && node native/scripts/media.mjs",
     "test:favicons": "node native/scripts/favicons.mjs"
