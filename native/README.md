@@ -15,7 +15,7 @@ open "native/build/Derivative.app"
 
 The first build downloads an approximately 135 MB official CEF archive and installs pinned CMake/Ninja versions in an isolated Python environment. `cef.lock.json` pins the framework and checksums. Dependencies and generated bundles are ignored by Git.
 
-The signed app is assembled in a repository-specific temporary directory and linked from `native/build/Derivative.app`. This avoids File Provider metadata interfering with signing in synced Desktop folders. Rebuild if temporary files are purged. Development signing is ad hoc. The public v0.1.0-preview.3 download is Developer ID signed and notarized; see the [distribution guide](../docs/releases.md) for the release signing process.
+The signed app is assembled in a repository-specific temporary directory and linked from `native/build/Derivative.app`. This avoids File Provider metadata interfering with signing in synced Desktop folders. Rebuild if temporary files are purged. Development signing is ad hoc. The public v0.1.0-preview.4 download is Developer ID signed and notarized; see the [distribution guide](../docs/releases.md) for the release signing process.
 
 ## Video compatibility and engine builds
 
@@ -56,6 +56,10 @@ Loaded background pages retain live form state while their views are detached. R
 ## Data and profiles
 
 Existing browser data remains at `~/Library/Application Support/Derivative Native Prototype` for compatibility with earlier builds. This is an internal storage path, not the app name. Use `DERIVATIVE_NATIVE_USER_DATA=/absolute/path` for an isolated profile. Website profiles are direct-child `Space-<ID>` directories; metadata is `native-state.json`.
+
+Release builds keep the existing profile directory above. Unsigned development builds now default to `~/Library/Application Support/Derivative Development`, so rebuilding cannot change Keychain permissions on the installed browser’s profile. An explicit `DERIVATIVE_NATIVE_USER_DATA` path still overrides the default.
+
+Each profile records a non-secret `keychain-identity.json` naming its own `Derivative Safe Storage` item (development builds use a separate service). The encryption secret stays in Keychain. Existing profiles migrate by copying the previous Chromium encryption secret into the new app-owned item before CEF starts, preserving encrypted cookies. That upgrade may require one approval for the old item. If access is denied or configuration is invalid, startup stops with an explanation instead of replacing the key or clearing browser data. The shared Chromium item is not deleted or given broader permissions.
 
 Metadata version 2 assigns favorites to Spaces. Existing shared favorites are copied once into independent collections for each existing Space, preserving their order and rebinding open favorite tabs to the correct copy. The original metadata is backed up as `native-state-before-space-favorites.json` before conversion. The original nine-site starter collection is replaced by the three current defaults only when every original name and URL remains unchanged; customized collections are preserved, with a `native-state-before-default-favorites.json` backup before replacement. New Spaces start with an empty collection. Removing a Space without open tabs also removes that Space's favorite collection. Do not open version 2 metadata with an older build that only understands version 1.
 

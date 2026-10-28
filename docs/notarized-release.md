@@ -1,26 +1,18 @@
-A signed and notarized macOS preview of Derivative, with Spaces, per-Space favorites, command search, a floating or fixed sidebar, split view, and pastel themes.
+This preview fixes repeated first-run requests for **Chromium Safe Storage**.
 
-**Apple Silicon · macOS 14 or later.**
+### Keychain startup fix
 
-### Redesigned installer
-
-The DMG opens with a pastel drag-to-install layout: Derivative on the left, a clear arrow, and Applications on the right. No Read Me file or extra visible files. The browser app and ZIP are unchanged from v0.1.0-preview.2; only the installer was repackaged, signed, and notarized again.
+- New profiles use their own **Derivative Safe Storage** item instead of sharing Chromium's generic item.
+- Existing profiles copy their original encryption key into the new app-owned item before Chromium starts, preserving encrypted cookies. An upgrade may require one approval to access the old item; subsequent launches reuse the saved identity.
+- Development builds use a separate profile and Keychain service, so rebuilding the app cannot change the installed browser's Keychain permissions.
+- Denied migration access stops startup with an explanation. It does not reset cookies, replace the old key, delete the shared Chromium item, or disable encryption.
 
 ### Install
 
-1. Download the `.dmg` below and open it.
-2. Drag **Derivative** into **Applications**.
-3. Open Derivative from Applications, then eject the installer.
+**Apple Silicon · macOS 14 or later.** Download the DMG, drag Derivative to Applications, and replace the existing app. Keep your profile for the key-preserving upgrade. The app and installer are Developer ID signed and notarized; notarization tickets are attached. A normal downloaded-app confirmation may still appear.
 
-This release is signed with Developer ID and notarized by Apple. Notarization tickets are attached to both the app and DMG. A normal “downloaded from the internet” confirmation may still appear. The older v0.1.0-preview.1 download remains unnotarized; use this release instead.
+The DMG includes the pastel drag-to-install layout. A ZIP alternative, checksums, and build manifest are included below. There is no automatic updater yet.
 
-The ZIP alternative contains the same signed, notarized app. `SHA256SUMS` verifies the files; `build-info.json` records the source revision, engine identity, Team ID, and Apple submission IDs.
+### Current limitations
 
-### Still an early preview
-
-- WebM is supported. H.264/AAC, MP4 streaming, and DRM are not enabled, so some videos and YouTube livestreams will not play.
-- Extensions, password management, sync, private browsing, and automatic updates are not implemented yet. Download new versions from Releases.
-- Tabs and organization restore across launches. Unsaved forms, split arrangements, and download history are session-only.
-- Notarization checks the submitted software for known malicious components; it is not a completed security audit or a guarantee that every browser feature works correctly.
-
-[Website](https://derivativebrowser.com) · [Report an issue](https://github.com/lamdiv/derivative/issues)
+H.264/AAC, MP4 streaming, and DRM are not enabled. Extensions, password management, sync, private browsing, and automatic updates are not implemented. This remains an early development preview.

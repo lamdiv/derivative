@@ -87,6 +87,7 @@ def main():
             # Exercise the hardened runtime before submitting anything to Apple.
             env = {**os.environ, 'DERIVATIVE_NATIVE_APP': str(staged_app)}
             subprocess.run(['node', 'native/scripts/verify.mjs'], cwd=ROOT, env=env, check=True)
+            subprocess.run(['node', 'native/scripts/keychain-browser.mjs'], cwd=ROOT, env=env, check=True)
         run('codesign', '--verify', '--deep', '--strict', staged_app)
         (stage / 'Applications').symlink_to('/Applications')
         prepared.write_text(json.dumps(configuration, indent=2) + '\n')

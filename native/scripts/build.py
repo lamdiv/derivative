@@ -114,7 +114,7 @@ def main():
     for directory in ['MacOS', 'Frameworks', 'Resources/ThirdParty']:
         (contents / directory).mkdir(parents=True, exist_ok=True)
     run('xcrun', 'swiftc', '-target', target, BUILD / 'Browser.o', BUILD / 'BrowserUI.o', wrapper,
-        '-framework', 'AppKit', '-framework', 'SwiftUI', '-framework', 'IOSurface', '-lc++',
+        '-framework', 'AppKit', '-framework', 'SwiftUI', '-framework', 'IOSurface', '-framework', 'Security', '-lc++',
         '-Xlinker', '-ObjC', '-o', contents / 'MacOS/Derivative')
     run('xcrun', 'clang++', *common, sources / 'Helper.cc', wrapper, '-framework', 'AppKit', '-framework', 'IOSurface', '-o', BUILD / 'Helper')
     framework = 'Chromium Embedded Framework.framework'
