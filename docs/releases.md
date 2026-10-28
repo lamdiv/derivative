@@ -64,3 +64,18 @@ Without `--identity` and `--notary-profile`, the packager still produces an expl
 - [Apple: Customizing the notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
 - [CEF: Code signing](https://github.com/chromiumembedded/cef/blob/master/docs/code_signing.md)
 - Entitlement references: Chromium `156.0.8078.17`, `chrome/app/app-entitlements.plist` and `helper-renderer-entitlements.plist`. Derivative limits main-app capabilities to its existing camera, microphone, Bluetooth, printing, and location features.
+
+## Installer presentation
+
+`installer.py` creates a 640 × 420 Finder window with Retina pastel artwork, the app on the left, a visible arrow, and an Applications shortcut on the right. Only those two items are visible. `dmgbuild` writes the saved icon view and background metadata without Finder automation. The app bundle is not given Finder metadata flags, which would invalidate strict signature verification.
+
+For a presentation-only release, reuse the previous signed app without rebuilding or resubmitting it:
+
+```sh
+DEVELOPER_DIR=/Library/Developer/CommandLineTools python3 native/scripts/repackage.py \
+  --from-version 0.1.0-preview.2 --version 0.1.0-preview.3 \
+  --identity 'Developer ID Application: Your Name (TEAMID)' \
+  --notary-profile derivative-notary
+```
+
+This verifies the source checksums and app signature/ticket, preserves the ZIP byte for byte, and submits only the newly signed DMG to Apple. `--resume` reuses its submission after a timeout. The manifest keeps `sourceCommit` for the original app and adds `installerSourceCommit` for the new packaging; tag that packaging commit for this release. The app inside and its bundle version remain unchanged.

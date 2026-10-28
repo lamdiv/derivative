@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from release_signing import identity_team, notarize, sign_app, staple, verify_app
+from installer import build_installer
 
 ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault('DEVELOPER_DIR', '/Library/Developer/CommandLineTools')
@@ -114,8 +115,7 @@ def main():
         # HFS+ invents Finder metadata for text licenses, breaking strict signing.
         partial = work / 'distribution.dmg'
         partial.unlink(missing_ok=True)
-        run('hdiutil', 'create', '-volname', f'Derivative {args.version}', '-fs', 'APFS',
-            '-srcfolder', stage, '-format', 'UDZO', '-imagekey', 'zlib-level=9', partial)
+        build_installer(staged_app, partial, args.version)
         if signed:
             run('codesign', '--force', '--sign', args.identity, '--timestamp', partial)
         partial.replace(dmg)
