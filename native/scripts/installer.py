@@ -2,6 +2,8 @@
 from pathlib import Path
 import subprocess
 import sys
+import shutil
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,6 +33,12 @@ def build_installer(app, destination, version):
         'icon_locations': {'Derivative.app': (180, 210), 'Applications': (460, 210)},
     }
     import json
-    subprocess.run([str(python), '-c',
-                    'import dmgbuild,json,sys; dmgbuild.build_dmg(sys.argv[1],sys.argv[2],settings=json.loads(sys.argv[3]))',
-                    str(destination), f'Derivative {version}', json.dumps(settings)], check=True)
+    # dmgbuild creates its writable image beside the output. File Provider can
+    # lock that image in a synced Desktop checkout, so construct it outside the
+    # checkout and copy back only the finished compressed image.
+    with tempfile.TemporaryDirectory(prefix='derivative-installer-') as directory:
+        image = Path(directory) / 'installer.dmg'
+        subprocess.run([str(python), '-c',
+                        'import dmgbuild,json,sys; dmgbuild.build_dmg(sys.argv[1],sys.argv[2],settings=json.loads(sys.argv[3]))',
+                        str(image), f'Derivative {version}', json.dumps(settings)], check=True)
+        shutil.copyfile(image, destination)
