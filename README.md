@@ -6,7 +6,7 @@
 <p align="center">A little space for a curious internet.</p>
 <p align="center"><strong>A native macOS browser, powered by Chromium.</strong><br />Inspired by the little things that made Arc feel like home.</p>
 <p align="center">
-  <strong><a href="https://github.com/lamdiv/derivative/releases/download/v0.1.0-preview.4/Derivative-0.1.0-preview.4-macos-arm64.dmg">Download for macOS</a></strong><br />
+  <strong><a href="https://github.com/lamdiv/derivative/releases/download/v0.1.0-preview.4/Derivative-0.1.0-preview.4-macos-arm64.dmg"><img src="assets/apple.svg" width="16" height="16" alt="" /> Download for Mac</a></strong><br />
   Apple Silicon · macOS 14+ · v0.1.0-preview.4 · Signed &amp; notarized preview
 </p>
 <p align="center">
