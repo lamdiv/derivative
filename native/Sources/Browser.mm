@@ -20,6 +20,7 @@
 #include "include/cef_cookie.h"
 #include "include/cef_task.h"
 #include "include/wrapper/cef_helpers.h"
+#include "BrowserKeychain.h"
 #include "include/wrapper/cef_library_loader.h"
 
 namespace {
@@ -403,10 +404,27 @@ int main(int argc, char* argv[]) {
     [NSApp setActivationPolicy:(getenv("DERIVATIVE_NATIVE_AUTOMATED") && std::string(getenv("DERIVATIVE_NATIVE_AUTOMATED")) == "1") ? NSApplicationActivationPolicyAccessory : NSApplicationActivationPolicyRegular];
     CefSettings settings;
     NSString* profile = NSProcessInfo.processInfo.environment[@"DERIVATIVE_NATIVE_USER_DATA"];
-    if (!profile) profile = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/Derivative Native Prototype"];
+    const bool development = DerivativeKeychain::DevelopmentBuild();
+    if (!profile) profile = [NSHomeDirectory() stringByAppendingPathComponent:development ? @"Library/Application Support/Derivative Development" : @"Library/Application Support/Derivative Native Prototype"];
     [[NSFileManager defaultManager] createDirectoryAtPath:profile withIntermediateDirectories:YES attributes:nil error:nil];
     char canonical[PATH_MAX];
     if (realpath(profile.fileSystemRepresentation, canonical)) profile = [NSString stringWithUTF8String:canonical];
+    setenv("DERIVATIVE_NATIVE_USER_DATA", profile.UTF8String, 1);
+    bool mock_keychain = false;
+    for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--use-mock-keychain") mock_keychain = true;
+    DerivativeKeychain::SystemBackend keychain;
+    DerivativeKeychain::Identity identity;
+    NSString* failure = nil;
+    if (!DerivativeKeychain::Prepare(profile, development, mock_keychain, keychain, identity, &failure)) {
+      NSAlert* alert = [[NSAlert alloc] init];
+      alert.messageText = @"Couldn't unlock saved browser data";
+      alert.informativeText = failure;
+      [alert addButtonWithTitle:@"Quit"];
+      [alert runModal];
+      return 1;
+    }
+    CefString(&settings.keychain_service_name) = identity.service.UTF8String;
+    CefString(&settings.keychain_account_name) = identity.account.UTF8String;
     CefString(&settings.root_cache_path) = profile.UTF8String;
     CefString(&settings.cache_path) = [profile stringByAppendingPathComponent:@"Default"].UTF8String;
     CefString(&settings.log_file) = [profile stringByAppendingPathComponent:@"chromium.log"].UTF8String;
