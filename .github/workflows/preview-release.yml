@@ -1,14 +1,18 @@
-name: macOS preview release
+name: Unsigned macOS preview (manual)
 
 on:
-  push:
-    tags: ['v*-preview.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing preview tag to build (UNNOTARIZED download)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: unsigned-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -21,6 +25,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
@@ -29,13 +34,13 @@ jobs:
           node-version: '22'
       - name: Build and package
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           test "$(uname -m)" = arm64
           python3 native/scripts/package.py --version "${RELEASE_TAG#v}"
       - name: Verify installed copy
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           version="${RELEASE_TAG#v}"
           output="$PWD/release/$version"
@@ -54,7 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           version="${RELEASE_TAG#v}"
           gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --title "Derivative $version" --notes-file docs/preview-release.md

@@ -1,23 +1,66 @@
-# Packaging a macOS preview
+# Distributing Derivative for macOS
 
-On an Apple Silicon Mac with the build prerequisites installed:
+Derivative currently targets Apple Silicon and macOS 14+. Public builds should be Developer ID signed and notarized. The existing v0.1.0-preview.1 download is an older, unnotarized preview; adding a developer account does not change that download.
+
+## One-time setup on the signing Mac
+
+1. In **Xcode → Settings → Accounts**, add the Apple account with the active Developer Program membership. Select the team and **Manage Certificates → + → Developer ID Application**. This must include a private key on this Mac; a downloaded `.cer` alone is not sufficient.
+2. Verify the identity:
+
+   ```sh
+   security find-identity -v -p codesigning
+   ```
+
+3. Store notarization credentials interactively in Keychain:
+
+   ```sh
+   DEVELOPER_DIR=/Library/Developer/CommandLineTools xcrun notarytool store-credentials derivative-notary
+   ```
+
+   Supply the Apple account, Developer Team ID, and an app-specific password when prompted. Do not put passwords, private keys, `.p12` files, or API keys in the repository or chat. An App Store Connect API key is another supported authentication option; see Apple's documentation below.
+
+## Build, sign, and notarize
+
+Install development dependencies with `npm ci` for the signed browser smoke test. Substitute the exact **Developer ID Application** identity from Keychain:
 
 ```sh
-DEVELOPER_DIR=/Library/Developer/CommandLineTools npm run package -- --version 0.1.0-preview.1
+DEVELOPER_DIR=/Library/Developer/CommandLineTools python3 native/scripts/package.py \
+  --version 0.1.0-preview.2 \
+  --identity 'Developer ID Application: Your Name (TEAMID)' \
+  --notary-profile derivative-notary
 ```
 
-The command builds the app, validates its signature and bundle environment, and creates a DMG, ZIP, build manifest, and `SHA256SUMS` in the ignored `release/<version>/` directory. `--skip-build` packages an existing verified build. The base version must match the app bundle version. Existing installers are never overwritten.
+The command builds a fresh app, stages an independent copy, and signs from the inside out: bundled native libraries, CEF framework, helper apps, then the outer app. Executable processes use the hardened runtime and secure timestamps. Only renderer/GPU helpers get JIT permission. Release signatures exclude debugging and blanket library-validation exceptions. The script rejects native code outside the known signing inventory.
 
-Before publishing, mount the DMG read-only, copy the app to a new location, and verify that copy:
+It runs the browser smoke test against the hardened app, submits an app archive, requires Apple's **Accepted** status, staples the app, and checks Gatekeeper. Then it creates the ZIP from the stapled app, creates/signs the DMG, submits and staples the DMG, and assesses that container. `build-info.json` records the Team ID and both notarization submission IDs. Final checksums are generated after stapling.
+
+Apple can take time to process a first submission. If the wait times out, do not delete staging or submit another copy. Run the same command with `--resume`. It requires the same source commit, version, identity, and Keychain profile and checks the existing submission. Receipts and rejection logs remain in ignored `release/<version>/.notary/`. The temporary signing stage stays outside the Desktop checkout to avoid File Provider metadata; `.work/stage-path.txt` records its location for resume. Keep both until distribution completes. Inspect a rejection before rebuilding under a new version.
+
+The output is a DMG, ZIP, build manifest, and `SHA256SUMS` in `release/<version>/`. Do not distribute incomplete output: the command must succeed and the manifest must report `notarized: true`.
+
+## Validate before publishing
+
+Mount the DMG read-only, copy its app to a fresh location, and verify that installed copy. Also extract and verify the ZIP:
 
 ```sh
 codesign --verify --deep --strict /path/to/Derivative.app
+xcrun stapler validate /path/to/Derivative.app
+spctl --assess --type execute --verbose=2 /path/to/Derivative.app
 DERIVATIVE_NATIVE_APP=/path/to/Derivative.app npm run test:browser
 shasum -a 256 -c SHA256SUMS
 ```
 
-Publish all four files as assets on a GitHub **prerelease**, tagged at the `sourceCommit` in `build-info.json`. Never commit app bundles or engine binaries to Git. Verify the public downloads after publishing.
+Check the downloaded installer through Finder on a clean Gatekeeper-enabled Mac. Test launch, web rendering, JavaScript, GPU rendering, downloads, permission prompts, quit and relaunch. Signing is not a claim of complete application security or media compatibility. Keep the documented codec and browser-service limitations in the release notes.
 
-The `macOS preview release` workflow runs on an Apple Silicon macOS 26 runner when a `v*-preview.*` tag is pushed. It builds a fresh app, checks both installers, runs the browser smoke test on a relocated copy, and uploads assets to a draft before publishing it as a prerelease. Push tags only at reviewed commits; a failed upload leaves a draft for inspection.
+Publish only the four final files as GitHub release assets. Exclude hidden staging and notarization directories. Tag the exact `sourceCommit` recorded in `build-info.json`; never commit app bundles or engine binaries. Verify public download hashes, then update README links and the release's signing status. Older downloads remain unnotarized.
 
-These packages are ad-hoc signed, not Developer ID signed or notarized. State that prominently in release notes, together with Apple Silicon/macOS 14 requirements, installation steps, and current media and browser-service limitations. Do not describe previews as production-ready or recommend disabling Gatekeeper.
+## Existing unsigned CI previews
+
+Without `--identity` and `--notary-profile`, the packager still produces an explicitly unnotarized, ad-hoc preview. The `Unsigned macOS preview (manual)` workflow uses this mode: **it is not a signed release pipeline**. It requires an explicit manual run against an existing tag; pushing a new signed release tag must not publish a competing unsigned build. Local certificates and profiles are not available on GitHub runners. A future CI signing setup needs a separately configured protected signing environment and credentials; do not commit them or silently fall back to unsigned distribution. The workflow on older commits can still have its former automatic trigger; tag signed releases only at a commit with the updated manual workflow.
+
+## References
+
+- [Apple: Create Developer ID certificates](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)
+- [Apple: Customizing the notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
+- [CEF: Code signing](https://github.com/chromiumembedded/cef/blob/master/docs/code_signing.md)
+- Entitlement references: Chromium `156.0.8078.17`, `chrome/app/app-entitlements.plist` and `helper-renderer-entitlements.plist`. Derivative limits main-app capabilities to its existing camera, microphone, Bluetooth, printing, and location features.
